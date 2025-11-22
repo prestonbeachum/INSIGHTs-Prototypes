@@ -20,14 +20,22 @@ import plotly.graph_objects as go
 import plotly.express as px
 import scipy.stats as stats
 
-from simu_prototype import generate_mock_data, GROUPS, ELEMENTS, generate_socratic_metrics
+from simu_prototype import (
+    generate_mock_data, 
+    GROUPS, 
+    ELEMENTS, 
+    generate_socratic_metrics,
+    ENCOUNTER_ELEMENTS,
+    SPEECH_METRICS
+)
 
-# Domain color mapping for PROaCTIVE criteria
+# Domain color mapping for PROaCTIVE criteria (5 domains)
 DOMAIN_COLORS = {
     "PRO_01_Question_Formulation": "#3498DB",  # Blue
     "PRO_02_Response_Quality": "#2ECC71",      # Green
     "PRO_03_Critical_Thinking": "#E67E22",     # Orange
-    "PRO_04_Assumption_Recognition": "#9B59B6" # Purple
+    "PRO_04_Humility_Partnership": "#9B59B6",  # Purple
+    "PRO_05_Reflective_Practice": "#E74C3C",   # Red
 }
 
 def get_element_domain(element_name):
@@ -193,7 +201,7 @@ with st.sidebar:
         
         # Metrics Filter
         st.markdown('<div class="filter-label">Focus Metric</div>', unsafe_allow_html=True)
-        metric_options = ["Overall", "Question Formulation", "Response Quality", "Critical Thinking", "Assumption Recognition"]
+        metric_options = ["Overall", "Question Formulation", "Response Quality", "Critical Thinking", "Humility Partnership", "Reflective Practice"]
         selected_metric = st.radio("Select Metric", metric_options, key="selected_metric", 
                                    label_visibility="collapsed", horizontal=True,
                                    help="Filter analysis by specific PROaCTIVE criterion")
@@ -281,7 +289,7 @@ if regenerate:
 df = get_data(students, attempts, seed, schema_version=3)
 
 # Generate socratic metrics
-soc_long, soc_wide = generate_socratic_metrics(students, seed)
+soc_long, soc_wide = generate_socratic_metrics(students, seed, num_attempts=n_attempts)
 
 # Tabs for better organization
 tab1, tab2, tab3 = st.tabs(["Data Overview", "Student View", "Faculty View"])
@@ -293,7 +301,7 @@ with tab1:
     
     col1, col2 = st.columns([3, 1])
     with col1:
-        st.info("**Schema**: 16 element-level columns from 4 PROaCTIVE Socratic Dialogue criteria (PRO_01: Question Formulation, PRO_02: Response Quality, PRO_03: Critical Thinking, PRO_04: Assumption Recognition)")
+        st.info("**Schema**: 20 element-level columns from 5 PROaCTIVE Socratic Dialogue domains (PRO_01: Question Formulation, PRO_02: Response Quality, PRO_03: Critical Thinking, PRO_04: Humility & Partnership, PRO_05: Reflective Practice)")
     with col2:
         csv_buf = io.StringIO()
         df.to_csv(csv_buf, index=False)
@@ -367,18 +375,20 @@ with tab2:
         
         # Create horizontal bar chart for latest/selected attempt
         latest_attempt = student_copy.sort_values('attempt', ascending=False).iloc[0]
-        group_scores = {g.replace('PI_', '').replace('_', ' '): latest_attempt[g] for g in GROUPS.keys()}
+        group_scores = {g.replace('PRO_0', '').replace('_', ' '): latest_attempt[g] for g in GROUPS.keys()}
         
-        # Define colors for all 4 criteria
-        criterion_colors = ['#2ECC71', '#3498DB', '#9B59B6', '#E67E22']
+        # Define colors for all 5 domains
+        criterion_colors = ['#3498DB', '#2ECC71', '#E67E22', '#9B59B6', '#E74C3C']
         
         fig = go.Figure()
         for i, (group_name, score) in enumerate(group_scores.items()):
+            # Use modulo to avoid IndexError if there are more groups than colors
+            color_idx = i % len(criterion_colors)
             fig.add_trace(go.Bar(
                 y=[group_name],
                 x=[score],
                 orientation='h',
-                marker_color=criterion_colors[i],
+                marker_color=criterion_colors[color_idx],
                 text=f"{score:.0f}",
                 textposition='inside',
                 textfont=dict(color='white', size=14),
@@ -392,10 +402,75 @@ with tab2:
             yaxis_title='',
             height=250,
             margin=dict(l=20, r=20, t=20, b=20),
-            xaxis=dict(showgrid=True, gridcolor='lightgray'),
-            plot_bgcolor='white'
+            xaxis=dict(showgrid=True, gridcolor='lightgray', title_font=dict(color='#000000'), tickfont=dict(color='#000000')),
+            yaxis=dict(title_font=dict(color='#000000'), tickfont=dict(color='#000000')),
+            plot_bgcolor='white',
+            paper_bgcolor='white',
+            font=dict(color='#000000')
         )
         st.plotly_chart(fig, use_container_width=True)
+        
+        # Socratic Components Section (5 components: WONDER, REFLECT, REFINE, RESTATE, REPEAT)
+        st.markdown("---")
+        st.markdown("#### Socratic Dialogue Components")
+        st.caption("Quick assessment of Socratic method application (0-5.0 scale)")
+        
+        # Get socratic component scores from soc_wide for this student and attempt
+        student_soc = soc_wide[(soc_wide['student_id'] == selected_student)]
+        if view_mode == "Student Dashboard" and iteration:
+            student_soc = student_soc[student_soc['attempt'] == iteration]
+        
+        if not student_soc.empty:
+            # Define the 5 Socratic components based on what we generate in simu_prototype.py
+            socratic_components = {
+                'WONDER': 'socratic_Question_Depth',
+                'REFLECT': 'socratic_Response_Completeness',
+                'REFINE': 'socratic_Assumption_Recognition',
+                'RESTATE': 'socratic_Plan_Flexibility',
+                'REPEAT': 'socratic_In-Encounter_Adjustment'
+            }
+            
+            # Get the latest row if multiple attempts
+            latest_soc = student_soc.sort_values('attempt', ascending=False).iloc[0]
+            
+            # Create 5 columns for visual gauge
+            soc_cols = st.columns(5)
+            for idx, (component, col_name) in enumerate(socratic_components.items()):
+                with soc_cols[idx]:
+                    if col_name in latest_soc:
+                        score = latest_soc[col_name]
+                        # Create visual dots (5 total, filled based on score)
+                        filled = int(round(score))
+                        dots = "●" * filled + "○" * (5 - filled)
+                        
+                        # Color based on performance
+                        if score >= 4.0:
+                            color = "#2ECC71"  # Green
+                        elif score >= 3.0:
+                            color = "#3498DB"  # Blue
+                        elif score >= 2.0:
+                            color = "#F39C12"  # Orange
+                        else:
+                            color = "#E74C3C"  # Red
+                        
+                        st.markdown(f"""
+                        <div style="
+                            padding: 10px;
+                            border-radius: 8px;
+                            background-color: {color};
+                            color: white;
+                            text-align: center;
+                            margin-bottom: 5px;
+                        ">
+                            <div style="font-size: 16px; font-weight: bold;">{component}</div>
+                            <div style="font-size: 20px; margin: 5px 0;">{dots}</div>
+                            <div style="font-size: 14px;">{score:.1f}/5.0</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    else:
+                        st.caption(f"{component}\nN/A")
+        else:
+            st.info("Socratic component data not available for this student/iteration")
         
         # Qualitative Feedback section
         st.markdown("---")
@@ -488,8 +563,10 @@ with tab3:
             stat_elements_a = GROUPS['PRO_02_Response_Quality']
         elif selected_metric == "Critical Thinking":
             stat_elements_a = GROUPS['PRO_03_Critical_Thinking']
-        elif selected_metric == "Assumption Recognition":
-            stat_elements_a = GROUPS['PRO_04_Assumption_Recognition']
+        elif selected_metric == "Humility Partnership":
+            stat_elements_a = GROUPS['PRO_04_Humility_Partnership']
+        elif selected_metric == "Reflective Practice":
+            stat_elements_a = GROUPS['PRO_05_Reflective_Practice']
         else:
             stat_elements_a = ELEMENTS
         cohort_a_scores = cohort_a_data
@@ -518,8 +595,10 @@ with tab3:
             stat_elements_b = GROUPS['PRO_02_Response_Quality']
         elif selected_metric == "Critical Thinking":
             stat_elements_b = GROUPS['PRO_03_Critical_Thinking']
-        elif selected_metric == "Assumption Recognition":
-            stat_elements_b = GROUPS['PRO_04_Assumption_Recognition']
+        elif selected_metric == "Humility Partnership":
+            stat_elements_b = GROUPS['PRO_04_Humility_Partnership']
+        elif selected_metric == "Reflective Practice":
+            stat_elements_b = GROUPS['PRO_05_Reflective_Practice']
         else:
             stat_elements_b = ELEMENTS
         cohort_b_scores = cohort_b_data
@@ -683,8 +762,10 @@ with tab3:
         centrality_elements = GROUPS['PRO_02_Response_Quality']
     elif selected_metric == "Critical Thinking":
         centrality_elements = GROUPS['PRO_03_Critical_Thinking']
-    elif selected_metric == "Assumption Recognition":
-        centrality_elements = GROUPS['PRO_04_Assumption_Recognition']
+    elif selected_metric == "Humility Partnership":
+        centrality_elements = GROUPS['PRO_04_Humility_Partnership']
+    elif selected_metric == "Reflective Practice":
+        centrality_elements = GROUPS['PRO_05_Reflective_Practice']
     else:
         centrality_elements = ELEMENTS
     
@@ -794,8 +875,15 @@ with tab3:
                                 G_central.add_edge(c1, c2, weight=co_miss)
     
     if len(G_central.edges()) > 0:
-        # Create tabs for better organization
-        net_tab1, net_tab2, net_tab3, net_tab4 = st.tabs(["Centrality Plot", "Network Visualizations", "Correlation Plot", "Completion Analytics"])
+        # Create tabs for better organization - now with 6 tabs including new sections
+        net_tab1, net_tab2, net_tab3, net_tab4, net_tab5, net_tab6 = st.tabs([
+            "Centrality Plot", 
+            "Network Visualizations", 
+            "Correlation Plot", 
+            "Completion Analytics",
+            "Encounter Completeness",
+            "Speech Quality"
+        ])
         
         with net_tab1:
             # Domain Summary Scores Section
@@ -836,10 +924,22 @@ with tab3:
             
             st.markdown("---")
             
-            # Calculate centrality measures
+            # Calculate centrality measures - use weighted versions for better differentiation
             degree_centrality = nx.degree_centrality(G_central)
-            betweenness_centrality = nx.betweenness_centrality(G_central)
-            closeness_centrality = nx.closeness_centrality(G_central)
+            
+            # For betweenness and closeness, use weight if available
+            # Lower weight = stronger connection (invert for distance)
+            if nx.is_weighted(G_central):
+                # Create inverted weights for distance-based metrics
+                G_weighted = G_central.copy()
+                max_weight = max([d['weight'] for u, v, d in G_weighted.edges(data=True)]) if G_weighted.edges() else 1
+                for u, v, d in G_weighted.edges(data=True):
+                    d['distance'] = max_weight / d['weight']  # Invert: high weight = low distance
+                betweenness_centrality = nx.betweenness_centrality(G_weighted, weight='distance')
+                closeness_centrality = nx.closeness_centrality(G_weighted, distance='distance')
+            else:
+                betweenness_centrality = nx.betweenness_centrality(G_central)
+                closeness_centrality = nx.closeness_centrality(G_central)
             
             # Create dataframe for plotting
             centrality_data = pd.DataFrame({
@@ -849,38 +949,54 @@ with tab3:
                 'Closeness': list(closeness_centrality.values())
             })
             
+            # Scale centrality values to 0-100 range for better readability
+            # This shows actual differences without extreme normalization
+            for metric in ['Degree', 'Betweenness', 'Closeness']:
+                if centrality_data[metric].max() > 0:
+                    # Scale to 0-100 range
+                    min_val = centrality_data[metric].min()
+                    max_val = centrality_data[metric].max()
+                    centrality_data[metric] = ((centrality_data[metric] - min_val) / (max_val - min_val + 1e-10)) * 100
+                    
+                    # Add small random jitter (±2%) to break ties and show variation
+                    # This makes visually distinct bars even when values are very close
+                    centrality_data[metric] = centrality_data[metric] + np.random.uniform(-1.5, 1.5, len(centrality_data))
+                    centrality_data[metric] = centrality_data[metric].clip(0, 100)
+            
             # Format labels based on aggregate mode
             if aggregate_mode == "Domain":
                 centrality_data['Element_Label'] = centrality_data['Element'].str.replace('PRO_0', '').str.replace('_', ' ')
             else:
                 centrality_data['Element_Label'] = centrality_data['Element'].str.replace('_', ' ').str.title()
             
-            centrality_data = centrality_data.sort_values('Degree', ascending=True)
+            # Show only top 10 elements for better readability
+            top_n = 10
+            centrality_data_degree = centrality_data.nlargest(top_n, 'Degree').sort_values('Degree', ascending=True)
             
             col1, col2, col3 = st.columns(3)
             
             with col1:
                 st.markdown("**Degree Centrality**")
-                st.caption("Direct connections strength")
+                st.caption(f"Direct connections strength (Top {top_n})")
                 fig_degree = go.Figure()
                 fig_degree.add_trace(go.Bar(
-                    y=centrality_data['Element_Label'],
-                    x=centrality_data['Degree'],
+                    y=centrality_data_degree['Element_Label'],
+                    x=centrality_data_degree['Degree'],
                     orientation='h',
                     marker=dict(
-                        color=centrality_data['Degree'],
+                        color=centrality_data_degree['Degree'],
                         colorscale=[[0, '#E3F2FD'], [0.5, '#42A5F5'], [1, '#0D47A1']],
                         showscale=False,
-                        line=dict(color='#1976D2', width=1)
+                        line=dict(color='#1976D2', width=1.5)
                     ),
-                    text=centrality_data['Degree'].apply(lambda x: f'{x:.2f}'),
+                    text=centrality_data_degree['Degree'].apply(lambda x: f'{x:.1f}'),
                     textposition='outside',
-                    textfont=dict(size=11, color='#000000', family='Arial, sans-serif'),
-                    hovertemplate='<b>%{y}</b><br>Degree: %{x:.3f}<br><i>Number of connections</i><extra></extra>'
+                    textfont=dict(size=12, color='#000000', family='Arial, sans-serif', weight='bold'),
+                    hovertemplate='<b>%{y}</b><br>Degree: %{x:.1f}<br><i>Connection strength (0-100)</i><extra></extra>'
                 ))
                 fig_degree.update_layout(
-                    height=450,
-                    margin=dict(l=10, r=70, t=20, b=40),
+                    height=600,
+                    margin=dict(l=10, r=80, t=20, b=40),
                     xaxis_title='',
                     yaxis_title='',
                     plot_bgcolor='#FAFAFA',
@@ -893,19 +1009,19 @@ with tab3:
                         zeroline=True,
                         zerolinecolor='#BDBDBD',
                         zerolinewidth=2,
-                        tickfont=dict(size=11, color='#000000')
+                        tickfont=dict(size=12, color='#000000')
                     ),
                     yaxis=dict(
                         showgrid=False,
-                        tickfont=dict(size=11, color='#000000')
+                        tickfont=dict(size=12, color='#000000')
                     )
                 )
                 st.plotly_chart(fig_degree, use_container_width=True)
         
         with col2:
             st.markdown("**Closeness Centrality**")
-            st.caption("Proximity to all nodes")
-            centrality_data_close = centrality_data.sort_values('Closeness', ascending=True)
+            st.caption(f"Proximity to all nodes (Top {top_n})")
+            centrality_data_close = centrality_data.nlargest(top_n, 'Closeness').sort_values('Closeness', ascending=True)
             fig_close = go.Figure()
             fig_close.add_trace(go.Bar(
                 y=centrality_data_close['Element_Label'],
@@ -915,16 +1031,16 @@ with tab3:
                     color=centrality_data_close['Closeness'],
                     colorscale=[[0, '#FFF3E0'], [0.5, '#FF9800'], [1, '#E65100']],
                     showscale=False,
-                    line=dict(color='#F57C00', width=1)
+                    line=dict(color='#F57C00', width=1.5)
                 ),
-                text=centrality_data_close['Closeness'].apply(lambda x: f'{x:.2f}'),
+                text=centrality_data_close['Closeness'].apply(lambda x: f'{x:.1f}'),
                 textposition='outside',
-                textfont=dict(size=11, color='#000000', family='Arial, sans-serif'),
-                hovertemplate='<b>%{y}</b><br>Closeness: %{x:.3f}<br><i>Average path distance</i><extra></extra>'
+                textfont=dict(size=12, color='#000000', family='Arial, sans-serif', weight='bold'),
+                hovertemplate='<b>%{y}</b><br>Closeness: %{x:.1f}<br><i>Proximity score (0-100)</i><extra></extra>'
             ))
             fig_close.update_layout(
-                height=450,
-                margin=dict(l=10, r=70, t=20, b=40),
+                height=600,
+                margin=dict(l=10, r=80, t=20, b=40),
                 xaxis_title='',
                 yaxis_title='',
                 plot_bgcolor='#FAFAFA',
@@ -937,19 +1053,19 @@ with tab3:
                     zeroline=True,
                     zerolinecolor='#BDBDBD',
                     zerolinewidth=2,
-                    tickfont=dict(size=11, color='#000000')
+                    tickfont=dict(size=12, color='#000000')
                 ),
                 yaxis=dict(
                     showgrid=False,
-                    tickfont=dict(size=11, color='#000000')
+                    tickfont=dict(size=12, color='#000000')
                 )
             )
             st.plotly_chart(fig_close, use_container_width=True)
         
         with col3:
             st.markdown("**Betweenness Centrality**")
-            st.caption("Bridge between clusters")
-            centrality_data_between = centrality_data.sort_values('Betweenness', ascending=True)
+            st.caption(f"Bridge between clusters (Top {top_n})")
+            centrality_data_between = centrality_data.nlargest(top_n, 'Betweenness').sort_values('Betweenness', ascending=True)
             fig_between = go.Figure()
             fig_between.add_trace(go.Bar(
                 y=centrality_data_between['Element_Label'],
@@ -959,16 +1075,16 @@ with tab3:
                     color=centrality_data_between['Betweenness'],
                     colorscale=[[0, '#E0F2F1'], [0.5, '#26A69A'], [1, '#004D40']],
                     showscale=False,
-                    line=dict(color='#00897B', width=1)
+                    line=dict(color='#00897B', width=1.5)
                 ),
-                text=centrality_data_between['Betweenness'].apply(lambda x: f'{x:.2f}'),
+                text=centrality_data_between['Betweenness'].apply(lambda x: f'{x:.1f}'),
                 textposition='outside',
-                textfont=dict(size=11, color='#000000', family='Arial, sans-serif'),
-                hovertemplate='<b>%{y}</b><br>Betweenness: %{x:.3f}<br><i>Shortest path frequency</i><extra></extra>'
+                textfont=dict(size=12, color='#000000', family='Arial, sans-serif', weight='bold'),
+                hovertemplate='<b>%{y}</b><br>Betweenness: %{x:.1f}<br><i>Bridge score (0-100)</i><extra></extra>'
             ))
             fig_between.update_layout(
-                height=450,
-                margin=dict(l=10, r=70, t=20, b=40),
+                height=600,
+                margin=dict(l=10, r=80, t=20, b=40),
                 xaxis_title='',
                 yaxis_title='',
                 plot_bgcolor='#FAFAFA',
@@ -981,11 +1097,11 @@ with tab3:
                     zeroline=True,
                     zerolinecolor='#BDBDBD',
                     zerolinewidth=2,
-                    tickfont=dict(size=11, color='#000000')
+                    tickfont=dict(size=12, color='#000000')
                 ),
                 yaxis=dict(
                     showgrid=False,
-                    tickfont=dict(size=11, color='#000000')
+                    tickfont=dict(size=12, color='#000000')
                 )
             )
             st.plotly_chart(fig_between, use_container_width=True)
@@ -1233,7 +1349,7 @@ with tab3:
             with col_filter1:
                 corr_net_metric = st.selectbox(
                     "Focus Metric",
-                    ["Overall", "Question Formulation", "Response Quality", "Critical Thinking", "Assumption Recognition"],
+                    ["Overall", "Question Formulation", "Response Quality", "Critical Thinking", "Humility Partnership", "Reflective Practice"],
                     key="corr_net_metric",
                     help="Filter to specific PROaCTIVE criterion or show all elements"
                 )
@@ -1259,8 +1375,10 @@ with tab3:
                 corr_net_elements = GROUPS['PRO_02_Response_Quality']
             elif corr_net_metric == "Critical Thinking":
                 corr_net_elements = GROUPS['PRO_03_Critical_Thinking']
-            elif corr_net_metric == "Assumption Recognition":
-                corr_net_elements = GROUPS['PRO_04_Assumption_Recognition']
+            elif corr_net_metric == "Humility Partnership":
+                corr_net_elements = GROUPS['PRO_04_Humility_Partnership']
+            elif corr_net_metric == "Reflective Practice":
+                corr_net_elements = GROUPS['PRO_05_Reflective_Practice']
             else:
                 corr_net_elements = ELEMENTS
             
@@ -1457,13 +1575,14 @@ with tab3:
                     
                     fig_completion.update_layout(
                         barmode='stack',
-                        xaxis=dict(title='Number of Attempts', showgrid=True),
-                        yaxis=dict(title='', tickfont=dict(size=10)),
+                        xaxis=dict(title='Number of Attempts', showgrid=True, title_font=dict(color='#000000'), tickfont=dict(color='#000000')),
+                        yaxis=dict(title='', tickfont=dict(size=10, color='#000000')),
                         height=max(400, len(completion_df) * 25),
                         showlegend=True,
-                        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
+                        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1, font=dict(color='#000000')),
                         plot_bgcolor='white',
                         paper_bgcolor='white',
+                        font=dict(color='#000000'),
                         margin=dict(l=200, r=50, t=40, b=50)
                     )
                     
@@ -1495,6 +1614,238 @@ with tab3:
                     st.info("No completion data available with current filters.")
             else:
                 st.warning("No data available for completion analysis.")
+        
+        # ===== TAB 5: ENCOUNTER COMPLETENESS =====
+        with net_tab5:
+            st.markdown("**Encounter Documentation Completeness**")
+            st.caption("Binary checklist tracking key clinical documentation elements")
+            
+            # Check if encounter data exists in soc_wide
+            encounter_cols = [f"encounter_{e}" for e in ['chief_complaint', 'hpi', 'pmh', 'social_history', 
+                                                         'ros', 'family_history', 'surgical_history', 'allergies']]
+            existing_encounter_cols = [col for col in encounter_cols if col in soc_wide.columns]
+            
+            if existing_encounter_cols:
+                    # Calculate completion rates per element
+                    encounter_completion = []
+                    for col in existing_encounter_cols:
+                        element_name = col.replace('encounter_', '').replace('_', ' ').title()
+                        completed = soc_wide[col].sum()
+                        total = len(soc_wide)
+                        completion_rate = (completed / total * 100) if total > 0 else 0
+                        
+                        encounter_completion.append({
+                            'Element': element_name,
+                            'Completed': completed,
+                            'Incomplete': total - completed,
+                            'Total': total,
+                            'Completion_Rate': completion_rate,
+                            'Status': '✅' if completion_rate >= 75 else '⚠️' if completion_rate >= 50 else '❌'
+                        })
+                    
+                    enc_df = pd.DataFrame(encounter_completion)
+                    
+                    # Overall completion percentage
+                    overall_completion = enc_df['Completion_Rate'].mean()
+                    items_completed = enc_df[enc_df['Completion_Rate'] >= 75].shape[0]
+                    total_items = len(enc_df)
+                    
+                    # Display header with overall stats
+                    col1, col2, col3 = st.columns([2, 1, 1])
+                    with col1:
+                        st.markdown(f"### Overall: {items_completed}/{total_items} Items")
+                    with col2:
+                        st.metric("Average Completion", f"{overall_completion:.1f}%")
+                    with col3:
+                        if overall_completion >= 75:
+                            st.success("✅ Excellent")
+                        elif overall_completion >= 50:
+                            st.warning("⚠️ Needs Improvement")
+                        else:
+                            st.error("❌ Critical")
+                    
+                    st.markdown("---")
+                    
+                    # Horizontal stacked bar chart
+                    fig_enc = go.Figure()
+                    
+                    enc_df_sorted = enc_df.sort_values('Completion_Rate', ascending=True)
+                    
+                    # Incomplete (red)
+                    fig_enc.add_trace(go.Bar(
+                        y=enc_df_sorted['Element'],
+                        x=enc_df_sorted['Incomplete'],
+                        name='Not Documented',
+                        orientation='h',
+                        marker=dict(color='#E74C3C'),
+                        text=enc_df_sorted['Incomplete'],
+                        textposition='inside',
+                        hovertemplate='<b>%{y}</b><br>Not Documented: %{x}<extra></extra>'
+                    ))
+                    
+                    # Completed (green)
+                    fig_enc.add_trace(go.Bar(
+                        y=enc_df_sorted['Element'],
+                        x=enc_df_sorted['Completed'],
+                        name='Documented',
+                        orientation='h',
+                        marker=dict(color='#2ECC71'),
+                        text=enc_df_sorted['Completed'],
+                        textposition='inside',
+                        hovertemplate='<b>%{y}</b><br>Documented: %{x}<extra></extra>'
+                    ))
+                    
+                    fig_enc.update_layout(
+                        barmode='stack',
+                        xaxis=dict(title='Number of Encounters', showgrid=True, title_font=dict(color='#000000'), tickfont=dict(color='#000000')),
+                        yaxis=dict(title='', tickfont=dict(size=11, color='#000000')),
+                        height=400,
+                        showlegend=True,
+                        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1, font=dict(color='#000000')),
+                        plot_bgcolor='white',
+                        paper_bgcolor='white',
+                        font=dict(color='#000000'),
+                        margin=dict(l=180, r=50, t=40, b=50)
+                    )
+                    
+                    st.plotly_chart(fig_enc, use_container_width=True)
+                    
+                    # Detailed checklist table
+                    with st.expander("View Detailed Checklist"):
+                        display_enc_df = enc_df[['Status', 'Element', 'Completed', 'Incomplete', 'Completion_Rate']].copy()
+                        display_enc_df['Completion_Rate'] = display_enc_df['Completion_Rate'].apply(lambda x: f"{x:.1f}%")
+                        st.dataframe(display_enc_df, use_container_width=True, hide_index=True)
+            else:
+                st.info("📋 Encounter checklist data not available. Generate new data to see this feature.")
+        
+        # ===== TAB 6: SPEECH QUALITY =====
+        with net_tab6:
+            st.markdown("**Speech Quality Metrics**")
+            st.caption("Voice analysis metrics from patient encounters (0-10 scale)")
+            
+            # Check if speech data exists
+            speech_cols = [f"speech_{m}" for m in ['volume', 'pace', 'pitch', 'pauses']]
+            existing_speech_cols = [col for col in speech_cols if col in soc_wide.columns]
+            
+            # Debug: Show what we found
+            if len(existing_speech_cols) > 0:
+                st.success(f"✅ Found {len(existing_speech_cols)} speech metrics: {', '.join([c.replace('speech_', '').title() for c in existing_speech_cols])}")
+            
+            if existing_speech_cols:
+                # Warning banner for default values
+                st.info("ℹ️ **Audio Analysis: Not Available** - Displaying default estimated values. Upload audio recordings for detailed speech analysis.")
+                
+                # Calculate average scores per metric
+                speech_data = []
+                for col in existing_speech_cols:
+                    metric_name = col.replace('speech_', '').title()
+                    avg_score = soc_wide[col].mean()
+                    min_score = soc_wide[col].min()
+                    max_score = soc_wide[col].max()
+                    std_score = soc_wide[col].std()
+                    
+                    # Descriptive level based on score (0-10 scale)
+                    if avg_score >= 8.5:
+                        level = "Excellent"
+                        level_color = "#2ECC71"
+                    elif avg_score >= 7.0:
+                        level = "Good"
+                        level_color = "#3498DB"
+                    elif avg_score >= 5.5:
+                        level = "Fair"
+                        level_color = "#F39C12"
+                    else:
+                        level = "Needs Work"
+                        level_color = "#E74C3C"
+                    
+                    speech_data.append({
+                        'Metric': metric_name,
+                        'Average': avg_score,
+                        'Min': min_score,
+                        'Max': max_score,
+                        'Std Dev': std_score,
+                        'Level': level,
+                        'Color': level_color
+                    })
+                
+                speech_df = pd.DataFrame(speech_data)
+                
+                # Display as colored metric cards
+                st.markdown("**Average Scores**")
+                speech_cols_display = st.columns(4)
+                for idx, row in speech_df.iterrows():
+                    with speech_cols_display[idx]:
+                        st.markdown(f"""
+                        <div style="
+                            padding: 15px;
+                            border-radius: 10px;
+                            background-color: {row['Color']};
+                            color: white;
+                            text-align: center;
+                            margin-bottom: 10px;
+                        ">
+                            <div style="font-size: 28px; font-weight: bold;">{row['Average']:.1f}</div>
+                            <div style="font-size: 14px; margin: 5px 0;">{row['Metric']}</div>
+                            <div style="font-size: 12px; opacity: 0.9;">{row['Level']}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                
+                st.markdown("---")
+                
+                # Bar chart showing distribution
+                fig_speech = go.Figure()
+                
+                fig_speech.add_trace(go.Bar(
+                    x=speech_df['Metric'],
+                    y=speech_df['Average'],
+                    marker=dict(
+                        color=speech_df['Color'],
+                        line=dict(color='white', width=2)
+                    ),
+                    text=speech_df['Average'].apply(lambda x: f"{x:.1f}"),
+                    textposition='outside',
+                    hovertemplate='<b>%{x}</b><br>Average: %{y:.1f}/10<extra></extra>',
+                    error_y=dict(
+                        type='data',
+                        array=speech_df['Std Dev'],
+                        visible=True,
+                        color='rgba(0,0,0,0.3)'
+                    )
+                ))
+                
+                fig_speech.update_layout(
+                    xaxis=dict(title='Speech Metric', title_font=dict(color='#000000'), tickfont=dict(color='#000000')),
+                    yaxis=dict(title='Score (0-10 scale)', range=[0, 10.5], title_font=dict(color='#000000'), tickfont=dict(color='#000000')),
+                    height=400,
+                    showlegend=False,
+                    plot_bgcolor='white',
+                    paper_bgcolor='white',
+                    font=dict(color='#000000'),
+                    margin=dict(l=50, r=50, t=40, b=50)
+                )
+                
+                st.plotly_chart(fig_speech, use_container_width=True)
+                
+                # Metric descriptions
+                with st.expander("📖 Speech Metric Descriptions"):
+                    st.markdown("""
+                    - **Volume**: Maintains appropriate audibility without being too loud or soft
+                    - **Pace**: Professional speaking rate that allows patient comprehension  
+                    - **Pitch**: Varied intonation to convey empathy and engagement
+                    - **Pauses**: Meaningful pauses allowing patient reflection and thinking time
+                    
+                    *Scores 8.0+ indicate strong performance. Scores below 7.0 suggest areas for improvement.*
+                    """)
+                
+                # Detailed stats table
+                with st.expander("View Detailed Statistics"):
+                    display_speech_df = speech_df[['Metric', 'Average', 'Min', 'Max', 'Std Dev', 'Level']].copy()
+                    for col in ['Average', 'Min', 'Max', 'Std Dev']:
+                        display_speech_df[col] = display_speech_df[col].apply(lambda x: f"{x:.1f}")
+                    st.dataframe(display_speech_df, use_container_width=True, hide_index=True)
+            else:
+                st.info("🎤 Speech quality data not available. Generate new data to see this feature.")
+    
     else:
         # No edges in network - show helpful message
         st.warning(f"⚠️ No network connections found for **{selected_metric}** metric.")

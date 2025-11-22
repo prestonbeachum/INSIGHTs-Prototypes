@@ -1,0 +1,26 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Start PROaCTIVE Dashboard",
+			"type": "shell",
+			"command": "cd ${workspaceFolder}/PROaCTIVE && source ../.venv/bin/activate && streamlit run streamlit_app.py --server.port 8502",
+			"isBackground": true,
+			"problemMatcher": []
+		},
+		{
+			"label": "PROaCTIVE Dashboard",
+			"type": "shell",
+			"command": "cd PROaCTIVE && source ../.venv/bin/activate && streamlit run streamlit_app.py --server.port 8502",
+			"isBackground": true,
+			"problemMatcher": []
+		},
+		{
+			"label": "Start PROaCTIVE Dashboard",
+			"type": "shell",
+			"command": "source .venv/bin/activate && cd PROaCTIVE && streamlit run streamlit_app.py --server.port 8502",
+			"isBackground": true,
+			"problemMatcher": []
+		}
+	]
+}

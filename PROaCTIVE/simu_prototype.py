@@ -43,38 +43,65 @@ DPI = 160
 # Default output directory (script directory)
 DEFAULT_OUT_DIR = Path(__file__).resolve().parent
 
-# New schema: PROaCTIVE Socratic Dialogue criteria, each with 4 elements
-# Covers: Question Formulation, Response Quality, Critical Thinking, and Assumption Recognition
-# These will be the columns in the CSV (16 numeric columns)
+# New schema: PROaCTIVE Socratic Dialogue criteria - 5 core domains, each with 4 elements
+# Based on PDF specifications: Question Formulation, Response Quality, Critical Thinking,
+# Humility & Partnership, and Reflective Practice
+# These will be the columns in the CSV (20 numeric columns)
 GROUPS = {
     "PRO_01_Question_Formulation": [
-        "inquiry_clarity",
-        "question_precision",
-        "conceptual_targeting",
-        "probing_depth",
+        "question_depth",
+        "question_types",
+        "question_timing",
+        "question_clarity",
     ],
     "PRO_02_Response_Quality": [
-        "answer_accuracy",
+        "reflective_pausing",
         "response_completeness",
-        "evidence_integration",
-        "clarity_expression",
+        "understanding_verification",
+        "empathic_acknowledgment",
     ],
     "PRO_03_Critical_Thinking": [
-        "logical_reasoning",
-        "argument_evaluation",
-        "inference_quality",
-        "pattern_recognition",
+        "assumption_recognition",
+        "reasoning_transparency",
+        "differential_thinking",
+        "complexity_navigation",
     ],
-    "PRO_04_Assumption_Recognition": [
-        "implicit_assumptions",
-        "bias_awareness",
-        "premise_examination",
-        "context_sensitivity",
+    "PRO_04_Humility_Partnership": [
+        "plan_flexibility",
+        "expertise_acknowledgment",
+        "uncertainty_communication",
+        "partnership_language",
+    ],
+    "PRO_05_Reflective_Practice": [
+        "in_encounter_adjustment",
+        "bias_recognition",
+        "style_awareness",
+        "post_encounter_reflection",
     ],
 }
 
-# Flattened list of element column names (16 columns)
+# Flattened list of element column names (20 columns)
 ELEMENTS = [el for group in GROUPS.values() for el in group]
+
+# Encounter completeness checklist (8 binary items)
+ENCOUNTER_ELEMENTS = [
+    "chief_complaint",
+    "hpi",
+    "pmh",
+    "social_history",
+    "ros",
+    "family_history",
+    "surgical_history",
+    "allergies",
+]
+
+# Speech quality metrics (0-10 scale, optional/secondary)
+SPEECH_METRICS = [
+    "volume",
+    "pace",
+    "pitch",
+    "pauses",
+]
 
 # -------------
 # 1) Generate mock data
@@ -354,12 +381,13 @@ def generate_socratic_metrics(students, seed=RANDOM_SEED, num_attempts=5):
     random.seed(seed)
     np.random.seed(seed)
 
-    # Define a few mock socratic metrics
+    # Define socratic metrics based on 5 core domains (0-5.0 scale)
     socratic_specs = [
         ("Question Formulation", "Question Depth", "levels"),
-        ("Response Quality", "Answer Completeness", "percent"),
-        ("Critical Thinking", "Logical Reasoning", "rating"),
-        ("Assumption Recognition", "Assumption Awareness", "rating"),
+        ("Response Quality", "Response Completeness", "percent"),
+        ("Critical Thinking", "Assumption Recognition", "rating"),
+        ("Humility Partnership", "Plan Flexibility", "percent"),
+        ("Reflective Practice", "In-Encounter Adjustment", "rating"),
     ]
 
     rows = []
@@ -373,12 +401,27 @@ def generate_socratic_metrics(students, seed=RANDOM_SEED, num_attempts=5):
         # Generate scores across attempts with progression
         for attempt in range(1, num_attempts + 1):
             wide = {"student_id": s, "attempt": attempt}
+            
+            # Generate encounter checklist (binary completion)
+            for enc_elem in ENCOUNTER_ELEMENTS:
+                # Probability of completion increases with attempts
+                completion_prob = 0.5 + (attempt - 1) * 0.08  # 50% → 82% by attempt 5
+                wide[f"encounter_{enc_elem}"] = 1 if random.random() < completion_prob else 0
+            
+            # Generate speech metrics (0-10 scale, typically 7-9 range)
+            for speech_metric in SPEECH_METRICS:
+                base_score = random.uniform(7.0, 8.5)
+                improvement = (attempt - 1) * random.uniform(0.1, 0.3)
+                noise = random.gauss(0, 0.5)
+                score = max(0.0, min(10.0, round(base_score + improvement + noise, 1)))
+                wide[f"speech_{speech_metric}"] = score
+            
             for area, metric, measurement in socratic_specs:
                 # Add progression: slight improvement over attempts with some noise
                 base = student_bases[metric]
-                progression = (attempt - 1) * random.uniform(0.1, 0.3)  # Gradual improvement on 0-4 scale
+                progression = (attempt - 1) * random.uniform(0.1, 0.3)  # Gradual improvement on 0-5 scale
                 noise = random.gauss(0, 0.4)  # Random variation
-                score = max(0.0, min(4.0, round(base + progression + noise, 1)))
+                score = max(0.0, min(5.0, round(base + progression + noise, 1)))
                 
                 rows.append({
                     "student_id": s, 
