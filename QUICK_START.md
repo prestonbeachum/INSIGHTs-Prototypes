@@ -26,7 +26,6 @@ INSIGHTs-Prototypes/
 ### 1️⃣ Start the Admin Dashboard (Recommended)
 
 ```bash
-cd /Users/zachkaiser/Documents/Insights/INSIGHTs-Prototypes
 ./admin/run_admin.sh
 ```
 
