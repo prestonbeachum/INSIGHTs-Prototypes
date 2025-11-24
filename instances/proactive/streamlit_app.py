@@ -510,8 +510,8 @@ with tab2:
         st.markdown("---")
         st.markdown("#### Speech Quality Metrics (0-10 scale)")
         
-        # Get speech metrics from soc_wide
-        if not student_soc.empty and view_mode == "Student Dashboard":
+        # Get speech metrics from soc_wide - show for both views
+        if not student_soc.empty:
             speech_metrics = {
                 'Volume': 'speech_volume',
                 'Pace': 'speech_pace',
@@ -520,15 +520,22 @@ with tab2:
             }
             
             speech_cols = st.columns(4)
+            all_na = True
             for idx, (metric_name, col_name) in enumerate(speech_metrics.items()):
                 with speech_cols[idx]:
-                    if col_name in latest_soc:
+                    if col_name in latest_soc and pd.notna(latest_soc[col_name]):
                         score = latest_soc[col_name]
                         st.metric(metric_name, f"{score:.1f}/10")
+                        all_na = False
                     else:
                         st.metric(metric_name, "N/A")
             
-            st.caption("⚠️ **Note:** Speech metrics use default values (no audio provided)")
+            if all_na:
+                st.caption("⚠️ **Note:** Speech metrics use default values (no audio provided)")
+            else:
+                st.caption("ℹ️ Speech quality assessed from encounter recording")
+        else:
+            st.info("Speech quality data not available for this student/iteration")
         
         # Qualitative Feedback sectiontion
         st.markdown("---")
