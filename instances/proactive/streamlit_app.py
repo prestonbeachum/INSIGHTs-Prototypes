@@ -1732,9 +1732,6 @@ with tab3:
                 st.success(f"✅ Found {len(existing_speech_cols)} speech metrics: {', '.join([c.replace('speech_', '').title() for c in existing_speech_cols])}")
             
             if existing_speech_cols:
-                # Warning banner for default values
-                st.info("ℹ️ **Audio Analysis: Not Available** - Displaying default estimated values. Upload audio recordings for detailed speech analysis.")
-                
                 # Calculate average scores per metric
                 speech_data = []
                 for col in existing_speech_cols:
