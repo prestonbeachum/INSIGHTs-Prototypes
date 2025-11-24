@@ -340,6 +340,40 @@ with tab2:
         filtered_df = student_df
     
     if not student_df.empty:
+        # Overall Performance Score (Student Dashboard only)
+        if view_mode == "Student Dashboard":
+            st.markdown("---")
+            st.markdown("### Socratic Dialogue Assessment Scoring for This Encounter")
+            
+            # Calculate overall performance (convert 0-4 scale to 0-10)
+            latest_attempt = student_df.sort_values('attempt', ascending=False).iloc[0]
+            overall_performance = (latest_attempt[ELEMENTS].mean() / 4.0) * 10.0
+            
+            col_perf1, col_perf2 = st.columns([1, 2])
+            with col_perf1:
+                st.markdown(f"<div style='background-color:#3498DB;color:white;padding:20px;border-radius:10px;text-align:center;'>"
+                           f"<h2 style='margin:0;color:white;'>Overall Performance</h2>"
+                           f"<h1 style='margin:10px 0;color:white;'>{overall_performance:.1f}/10</h1></div>", 
+                           unsafe_allow_html=True)
+            
+            with col_perf2:
+                st.markdown("**Your Chosen Feedback Style**")
+                feedback_style = st.radio(
+                    "Select feedback detail level",
+                    options=["Brief", "Detailed", "Comprehensive"],
+                    index=1,
+                    horizontal=True,
+                    key=f"feedback_style_{selected_student}",
+                    label_visibility="collapsed"
+                )
+                
+                if feedback_style == "Brief":
+                    st.caption("*Summary feedback with key highlights only*")
+                elif feedback_style == "Detailed":
+                    st.caption("*Comprehensive feedback with extensive analysis and specific examples*")
+                else:
+                    st.caption("*Complete analysis with all elements, examples, and detailed recommendations*")
+        
         # Summary metrics section
         st.markdown("---")
         st.markdown("#### Summary")
@@ -472,38 +506,290 @@ with tab2:
         else:
             st.info("Socratic component data not available for this student/iteration")
         
-        # Qualitative Feedback section
+        # Speech Quality Metrics Section
         st.markdown("---")
-        st.markdown("#### Qualitative Feedback (AI)")
+        st.markdown("#### Speech Quality Metrics (0-10 scale)")
+        
+        # Get speech metrics from soc_wide
+        if not student_soc.empty and view_mode == "Student Dashboard":
+            speech_metrics = {
+                'Volume': 'speech_volume',
+                'Pace': 'speech_pace',
+                'Pitch': 'speech_pitch',
+                'Pauses': 'speech_pauses'
+            }
+            
+            speech_cols = st.columns(4)
+            for idx, (metric_name, col_name) in enumerate(speech_metrics.items()):
+                with speech_cols[idx]:
+                    if col_name in latest_soc:
+                        score = latest_soc[col_name]
+                        st.metric(metric_name, f"{score:.1f}/10")
+                    else:
+                        st.metric(metric_name, "N/A")
+            
+            st.caption("⚠️ **Note:** Speech metrics use default values (no audio provided)")
+        
+        # Qualitative Feedback sectiontion
+        st.markdown("---")
+        st.markdown("### Detailed Performance Analysis")
         
         # Show which iteration is being analyzed
         if view_mode == "Student Dashboard" and iteration:
             st.caption(f"*Feedback for Iteration {iteration}*")
         
-        # Generate mock feedback based on scores (0-4 rubric scale)
-        feedback_items = []
-        for gname, elements in GROUPS.items():
+        # Generate detailed feedback for each domain
+        for idx, (gname, elements) in enumerate(GROUPS.items(), 1):
             avg_score = latest_attempt[gname]
-            group_label = gname.replace('PI_', '').replace('_', ' ')
+            domain_label = gname.replace('PRO_0', '').replace('_', ' ')
             
-            if avg_score >= 3.5:  # Exemplary
-                feedback_items.append(f"**{group_label}**: Strong performance - identified key elements effectively")
-            elif avg_score >= 2.5:  # Proficient
-                feedback_items.append(f"**{group_label}**: Good understanding - minor areas for improvement")
-            else:  # Developing or below
-                feedback_items.append(f"**{group_label}**: Review recommended - focus on core principles")
+            # Determine proficiency level
+            if avg_score >= 4.1:
+                proficiency = "Advanced"
+                prof_color = "#2ECC71"
+            elif avg_score >= 3.1:
+                proficiency = "Proficient"
+                prof_color = "#3498DB"
+            elif avg_score >= 2.1:
+                proficiency = "Emerging"
+                prof_color = "#F39C12"
+            else:
+                proficiency = "Developing"
+                prof_color = "#E74C3C"
+            
+            with st.expander(f"**{idx}. {domain_label} - Score: {avg_score:.1f}/5.0 ({proficiency})**", expanded=(idx==1)):
+                # Domain-specific detailed feedback
+                if "Question" in domain_label:
+                    st.markdown("**Question Depth:** Progresses from simple to complex")
+                    st.markdown(f"**Proficiency:** {proficiency} ({avg_score:.1f}/5.0)")
+                    st.markdown("**Question Types:** Uses clarification, understanding check, values exploration")
+                    
+                    st.markdown("##### Key Points Covered:")
+                    st.markdown("- Open-ended solicitation of chief complaint in patient's own words")
+                    st.markdown("- Chronological and detailed symptom exploration using clarifying questions")
+                    st.markdown("- Values exploration questions to understand patient perspective")
+                    
+                    st.markdown("##### Key Points Missed:")
+                    st.markdown("- Could include more systematic inquiry about symptom timeline")
+                    st.markdown("- Consider adding questions about impact on daily activities")
+                    
+                    st.markdown("##### Specific Recommendations:")
+                    st.markdown("• Practice formulating open-ended questions at multiple levels")
+                    st.markdown("• Focus on question timing and clarity")
+                    st.markdown("• Review rubric for question depth criteria")
+                    
+                    st.markdown("##### Reflection Questions:")
+                    st.info("*How might varying your question types enhance patient engagement and information gathering?*")
+                    
+                elif "Response" in domain_label:
+                    st.markdown("**Response Completeness:** Demonstrates active listening")
+                    st.markdown(f"**Proficiency:** {proficiency} ({avg_score:.1f}/5.0)")
+                    
+                    st.markdown("##### Key Points Covered:")
+                    st.markdown("- Complete and thoughtful responses to patient statements")
+                    st.markdown("- Effective use of reflective pausing")
+                    st.markdown("- Verification of understanding before proceeding")
+                    
+                    st.markdown("##### Specific Recommendations:")
+                    st.markdown("• Work on active listening techniques")
+                    st.markdown("• Practice reflective pausing before responding")
+                    st.markdown("• Develop verification strategies")
+                    
+                    st.markdown("##### Reflection Questions:")
+                    st.info("*What strategies could you use to better verify understanding before moving forward?*")
+                    
+                elif "Critical" in domain_label:
+                    st.markdown("**Clinical Reasoning:** Transparent thought processes")
+                    st.markdown(f"**Proficiency:** {proficiency} ({avg_score:.1f}/5.0)")
+                    
+                    st.markdown("##### Key Points Covered:")
+                    st.markdown("- Clear articulation of diagnostic reasoning")
+                    st.markdown("- Recognition of clinical patterns")
+                    st.markdown("- Consideration of differential diagnoses")
+                    
+                    st.markdown("##### Specific Recommendations:")
+                    st.markdown("• Strengthen clinical reasoning transparency by verbalizing thought process")
+                    st.markdown("• Practice differential thinking with case scenarios")
+                    st.markdown("• Increase transparency of clinical reasoning in patient-friendly language")
+                    
+                    st.markdown("##### Reflection Questions:")
+                    st.info("*How can you more effectively communicate your reasoning to help patients understand your clinical decision-making?*")
+                    
+                elif "Humility" in domain_label:
+                    st.markdown("**Partnership Language:** Collaborative approach")
+                    st.markdown(f"**Proficiency:** {proficiency} ({avg_score:.1f}/5.0)")
+                    
+                    st.markdown("##### Key Points Covered:")
+                    st.markdown("- Use of partnership language")
+                    st.markdown("- Appropriate acknowledgment of expertise limits")
+                    st.markdown("- Flexibility in care planning")
+                    
+                    st.markdown("##### Specific Recommendations:")
+                    st.markdown("• Focus on shared decision-making language")
+                    st.markdown("• Practice acknowledging uncertainty appropriately")
+                    st.markdown("• Invite patient partnership in care planning")
+                    
+                    st.markdown("##### Reflection Questions:")
+                    st.info("*In what ways can you better incorporate patient preferences and values into your care recommendations?*")
+                    
+                else:  # Reflective Practice
+                    st.markdown("**Self-Awareness:** In-encounter adjustments")
+                    st.markdown(f"**Proficiency:** {proficiency} ({avg_score:.1f}/5.0)")
+                    
+                    st.markdown("##### Key Points Covered:")
+                    st.markdown("- Demonstrated self-awareness during encounter")
+                    st.markdown("- Effective in-encounter adjustments")
+                    st.markdown("- Recognition of communication patterns")
+                    
+                    st.markdown("##### Specific Recommendations:")
+                    st.markdown("• Develop habit of in-encounter self-monitoring")
+                    st.markdown("• Note one adjustment per encounter and reflect on why")
+                    st.markdown("• Consider recording encounters for self-review")
+                    
+                    st.markdown("##### Reflection Questions:")
+                    st.info("*What patterns do you notice in your communication style, and how might awareness of these patterns improve your practice?*")
         
-        # Add mode-specific feedback
+        # Proficiency Interpretation Section
+        st.markdown("---")
+        st.markdown("### Proficiency Interpretation")
+        
+        avg_overall = sum(latest_attempt[g] for g in GROUPS.keys()) / len(GROUPS)
+        if avg_overall >= 4.1:
+            overall_level = "Advanced"
+            interpretation = "Exhibits sophisticated, adaptive patient dialogue skills; serves as model for others"
+        elif avg_overall >= 3.1:
+            overall_level = "Proficient"
+            interpretation = "Consistently demonstrates effective Socratic dialogue techniques with patients"
+        elif avg_overall >= 2.1:
+            overall_level = "Emerging"
+            interpretation = "Shows growing skills in patient-centered dialogue across multiple encounters"
+        else:
+            overall_level = "Developing"
+            interpretation = "Beginning to incorporate dialogue techniques; primarily information-gathering approach"
+        
+        st.markdown(f"**Overall Proficiency Level:** {overall_level} ({avg_overall:.1f}/5.0)")
+        st.info(interpretation)
+        
+        # Proficiency Scale Table
+        st.markdown("##### Overall Score Range & Capacity Levels")
+        proficiency_table = {
+            "Score Range": ["1.0 - 2.0", "2.1 - 3.0", "3.1 - 4.0", "4.1 - 5.0"],
+            "Capacity Level": ["Developing", "Emerging", "Proficient", "Advanced"],
+            "Clinical Description": [
+                "Beginning to incorporate dialogue techniques; primarily information-gathering approach",
+                "Shows growing skills in patient-centered dialogue across multiple encounters",
+                "Consistently demonstrates effective Socratic dialogue techniques with patients",
+                "Exhibits sophisticated, adaptive patient dialogue skills; serves as model for others"
+            ]
+        }
+        
+        import pandas as pd
+        prof_df = pd.DataFrame(proficiency_table)
+        st.table(prof_df)
+        
+        # Feedback Rating Section (Student View Only)
         if view_mode == "Student Dashboard":
-            if "Socratic" in mode_sim_u:
-                feedback_items.append(f"**Communication**: Socratic dialogue skills demonstrate effective questioning")
-            if "Verbal" in mode_sim_u:
-                feedback_items.append(f"**Clinical Reasoning**: Verbal communication shows clear thought process")
-        
-        feedback_items.append(f"**Next steps**: Review rubric nodes and practice scenarios before next attempt")
-        
-        for item in feedback_items:
-            st.markdown(f"• {item}")
+            st.markdown("---")
+            st.markdown("#### 📊 Rate This Feedback")
+            st.caption("Your ratings help us improve the feedback system. Please rate each aspect on a scale of 1-5.")
+            
+            # Create unique keys for this iteration's feedback ratings
+            rating_key_base = f"rating_{selected_student}_{iteration}"
+            
+            # Rating 1: Clarity
+            st.markdown("**Clarity:** How clear was the feedback?")
+            clarity_rating = st.radio(
+                "Clarity rating",
+                options=[1, 2, 3, 4, 5],
+                format_func=lambda x: str(x),
+                horizontal=True,
+                key=f"{rating_key_base}_clarity",
+                label_visibility="collapsed"
+            )
+            col_c1, col_c2 = st.columns([1, 1])
+            with col_c1:
+                st.caption("*Very Unclear*")
+            with col_c2:
+                st.caption("*Very Clear*", help=None)
+                
+            st.markdown("---")
+            
+            # Rating 2: Actionability
+            st.markdown("**Actionability:** How actionable were the recommendations?")
+            action_rating = st.radio(
+                "Actionability rating",
+                options=[1, 2, 3, 4, 5],
+                format_func=lambda x: str(x),
+                horizontal=True,
+                key=f"{rating_key_base}_action",
+                label_visibility="collapsed"
+            )
+            col_a1, col_a2 = st.columns([1, 1])
+            with col_a1:
+                st.caption("*Not Actionable*")
+            with col_a2:
+                st.caption("*Very Actionable*")
+                
+            st.markdown("---")
+            
+            # Rating 3: Appropriate Detail
+            st.markdown("**Appropriate Detail:** Was the level of detail appropriate?")
+            detail_rating = st.radio(
+                "Detail rating",
+                options=[1, 2, 3, 4, 5],
+                format_func=lambda x: str(x),
+                horizontal=True,
+                key=f"{rating_key_base}_detail",
+                label_visibility="collapsed"
+            )
+            col_d1, col_d2 = st.columns([1, 1])
+            with col_d1:
+                st.caption("*Too Little/Too Much*")
+            with col_d2:
+                st.caption("*Just Right*")
+                
+            st.markdown("---")
+            
+            # Rating 4: Question Quality
+            st.markdown("**Question Quality:** Were the reflection questions helpful?")
+            question_rating = st.radio(
+                "Question quality rating",
+                options=[1, 2, 3, 4, 5],
+                format_func=lambda x: str(x),
+                horizontal=True,
+                key=f"{rating_key_base}_questions",
+                label_visibility="collapsed"
+            )
+            col_q1, col_q2 = st.columns([1, 1])
+            with col_q1:
+                st.caption("*Not Helpful*")
+            with col_q2:
+                st.caption("*Very Helpful*")
+                
+            st.markdown("---")
+            
+            # Rating 5: Overall Satisfaction
+            st.markdown("**Overall Satisfaction:** Overall, how satisfied are you with this feedback?")
+            overall_rating = st.radio(
+                "Overall satisfaction rating",
+                options=[1, 2, 3, 4, 5],
+                format_func=lambda x: str(x),
+                horizontal=True,
+                key=f"{rating_key_base}_overall",
+                label_visibility="collapsed"
+            )
+            col_o1, col_o2 = st.columns([1, 1])
+            with col_o1:
+                st.caption("*Very Dissatisfied*")
+            with col_o2:
+                st.caption("*Very Satisfied*")
+            
+            # Submit button for ratings
+            st.markdown("---")
+            if st.button("Submit Ratings", type="primary", use_container_width=True):
+                # In a real system, this would save the ratings to a database
+                st.success("✅ Thank you for your feedback! Your ratings have been recorded and will help us improve the system.")
+                st.info(f"**Your Ratings Summary:**\n- Clarity: {clarity_rating}/5\n- Actionability: {action_rating}/5\n- Detail: {detail_rating}/5\n- Question Quality: {question_rating}/5\n- Overall: {overall_rating}/5")
         
         # Action buttons
         st.markdown("---")
