@@ -16,10 +16,10 @@ INSIGHTs is a comprehensive assessment platform that supports multiple criteria-
 
 ### 1. Start the Admin Dashboard
 ```bash
-./run_admin.sh
+./admin/run_admin.sh
 # Or manually:
 source .venv/bin/activate
-streamlit run admin_app.py --server.port 8500
+streamlit run admin/admin_app.py --server.port 8500
 ```
 Access at: http://localhost:8500
 
@@ -31,13 +31,12 @@ Access at: http://localhost:8500
 ### 3. Or Start Instances Manually
 ```bash
 # Professional Integrity
-source .venv/bin/activate
-streamlit run streamlit_app.py --server.port 8501
+cd instances/professional_integrity
+./run.sh
 
 # PROaCTIVE
-cd PROaCTIVE
-source ../.venv/bin/activate
-streamlit run streamlit_app.py --server.port 8502
+cd instances/proactive
+./run.sh
 ```
 
 ## 📊 Applications
@@ -109,25 +108,40 @@ streamlit run streamlit_app.py --server.port 8502
 ## 📁 Directory Structure
 
 ```
-INSIGHTs_SIMU_Proto/
-├── admin_app.py                    # Admin dashboard
-├── admin_config.json               # Admin configuration
-├── run_admin.sh                    # Admin launch script
-├── ADMIN_README.md                 # Admin documentation
+INSIGHTs-Prototypes/
+├── admin/                          # Admin dashboard
+│   ├── admin_app.py
+│   ├── admin_config.json
+│   └── run_admin.sh
+│
+├── instances/                      # Assessment instances
+│   ├── professional_integrity/     # PI instance
+│   │   ├── streamlit_app.py
+│   │   ├── simu_prototype.py
+│   │   └── run.sh
+│   │
+│   └── proactive/                  # PROaCTIVE instance
+│       ├── streamlit_app.py
+│       ├── simu_prototype.py
+│       └── run.sh
+│
+├── data/                           # Data files
+│   └── *.csv
+│
+├── outputs/                        # Generated visualizations
+│   └── *.png
+│
+├── docs/                           # Documentation
+│   ├── admin/                      # Admin documentation
+│   ├── guides/                     # User guides
+│   ├── pdfs/                       # Reference PDFs
+│   └── notes/                      # Meeting notes & summaries
+│
+├── scripts/                        # Utility scripts
+│   └── create_criteria_instance.py
+│
+├── requirements.txt                # Python dependencies
 ├── README.md                       # This file
-│
-├── streamlit_app.py                # PI application
-├── simu_prototype.py               # PI data generation
-├── run.sh                          # PI launch script
-│
-├── PROaCTIVE/                      # PROaCTIVE instance
-│   ├── streamlit_app.py
-│   ├── simu_prototype.py
-│   └── run.sh
-│
-├── create_criteria_instance.py     # Instance duplication script
-├── MULTI_INSTANCE_README.md        # Multi-instance guide
-│
 └── .venv/                          # Shared virtual environment
     └── (Python packages)
 ```
@@ -162,7 +176,7 @@ chmod +x run_admin.sh run.sh PROaCTIVE/run.sh
 ## 📖 Usage Guides
 
 ### For Administrators
-See **[ADMIN_README.md](ADMIN_README.md)** for:
+See **[docs/admin/ADMIN_README.md](docs/admin/ADMIN_README.md)** for:
 - Admin dashboard features
 - Instance management
 - User management (future)
@@ -170,7 +184,7 @@ See **[ADMIN_README.md](ADMIN_README.md)** for:
 - Troubleshooting
 
 ### For Creating New Instances
-See **[MULTI_INSTANCE_README.md](MULTI_INSTANCE_README.md)** for:
+See **[docs/guides/MULTI_INSTANCE_README.md](docs/guides/MULTI_INSTANCE_README.md)** for:
 - Using the duplication script
 - Customizing criteria
 - Setting up new assessments
@@ -219,7 +233,7 @@ Each instance has its own interface:
 
 ### Option 2: Via Command Line
 ```bash
-python3 create_criteria_instance.py --name "Clinical Reasoning" --port 8503
+python3 scripts/create_criteria_instance.py --name "Clinical Reasoning" --port 8503
 ```
 
 This will:
@@ -337,9 +351,10 @@ lsof -ti:8500 | xargs kill
 
 ## 📚 Documentation
 
-- **[ADMIN_README.md](ADMIN_README.md)**: Admin dashboard guide
-- **[MULTI_INSTANCE_README.md](MULTI_INSTANCE_README.md)**: Multi-instance setup
-- **Individual READMEs**: Each instance folder contains specific documentation
+- **[docs/admin/ADMIN_README.md](docs/admin/ADMIN_README.md)**: Admin dashboard guide
+- **[docs/guides/MULTI_INSTANCE_README.md](docs/guides/MULTI_INSTANCE_README.md)**: Multi-instance setup
+- **docs/pdfs/**: Reference materials and specifications
+- **docs/notes/**: Implementation notes and meeting summaries
 
 ## 🤝 Contributing
 

@@ -18,11 +18,11 @@ The Admin Dashboard provides a unified control panel for:
 
 ```bash
 # Option 1: Use the launch script
-./run_admin.sh
+./admin/run_admin.sh
 
 # Option 2: Manual command
 source .venv/bin/activate
-streamlit run admin_app.py --server.port 8500
+streamlit run admin/admin_app.py --server.port 8500
 ```
 
 The admin dashboard will be available at: **http://localhost:8500**

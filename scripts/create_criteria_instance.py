@@ -3,9 +3,9 @@
 Script to duplicate the INSIGHTs SIM-U application for a new criteria set.
 
 Usage:
-    python create_criteria_instance.py --name "Clinical_Reasoning" --port 8502
+    python scripts/create_criteria_instance.py --name "Clinical_Reasoning" --port 8503
 
-This creates a new directory with updated criteria groups that you can customize.
+This creates a new directory in instances/ with updated criteria groups that you can customize.
 """
 
 import argparse
@@ -19,13 +19,14 @@ def create_instance(source_dir: Path, target_name: str, port: int = 8502):
     Create a new criteria instance by copying and updating files.
     
     Args:
-        source_dir: Path to the source application directory
+        source_dir: Path to the source application directory (e.g., instances/professional_integrity)
         target_name: Name for the new criteria (e.g., "Clinical_Reasoning")
         port: Port number for the new Streamlit instance
     """
     
-    # Create target directory
-    target_dir = source_dir.parent / target_name
+    # Create target directory in instances folder
+    instances_dir = source_dir.parent
+    target_dir = instances_dir / target_name.lower().replace(" ", "_")
     
     if target_dir.exists():
         print(f"❌ Directory {target_dir} already exists!")
@@ -196,8 +197,14 @@ def main():
     
     args = parser.parse_args()
     
-    # Get the source directory (current directory)
-    source_dir = Path(__file__).resolve().parent
+    # Get the source directory (use professional_integrity as template)
+    script_dir = Path(__file__).resolve().parent
+    source_dir = script_dir.parent / "instances" / "professional_integrity"
+    
+    if not source_dir.exists():
+        print(f"❌ Template directory not found: {source_dir}")
+        print("Please ensure the professional_integrity instance exists.")
+        return
     
     create_instance(source_dir, args.name, args.port)
 

@@ -3,7 +3,7 @@
     {
       "name": "Professional Integrity",
       "short_name": "PI",
-      "path": ".",
+      "path": "instances/professional_integrity",
       "port": 8501,
       "description": "Professional Integrity Assessment",
       "criteria_count": 4,
@@ -12,7 +12,7 @@
     {
       "name": "PROaCTIVE",
       "short_name": "PRO",
-      "path": "PROaCTIVE",
+      "path": "instances/proactive",
       "port": 8502,
       "description": "Socratic Dialogue Analytics",
       "criteria_count": 4,
@@ -21,7 +21,7 @@
   ],
   "users": [],
   "settings": {
-    "base_path": "/Users/prestonbeachum/INSIGHTs_SIMU_Proto",
+    "base_path": "/Users/zachkaiser/Documents/Insights/INSIGHTs-Prototypes",
     "python_env": ".venv/bin/activate",
     "auto_start": false,
     "log_level": "INFO"

@@ -7,17 +7,16 @@ This directory contains a script to create separate instances of the SIM-U appli
 ### Create a New Instance
 
 ```bash
-cd /Users/prestonbeachum/INSIGHTs_SIMU_Proto
-python3 create_criteria_instance.py --name "Clinical_Reasoning" --port 8502
+cd /path/to/INSIGHTs-Prototypes
+python3 scripts/create_criteria_instance.py --name "Clinical_Reasoning" --port 8503
 ```
 
 This will:
-1. ✅ Create a new directory: `../Clinical_Reasoning/`
-2. ✅ Copy all application files
-3. ✅ Create a fresh virtual environment
-4. ✅ Install all dependencies
-5. ✅ Generate a `run.sh` launch script
-6. ✅ Update page titles and add placeholder criteria
+1. ✅ Create a new directory: `instances/clinical_reasoning/`
+2. ✅ Copy all application files from professional_integrity template
+3. ✅ Use the shared virtual environment
+4. ✅ Generate a `run.sh` launch script
+5. ✅ Update page titles and add placeholder criteria
 
 ### What You Need to Customize
 

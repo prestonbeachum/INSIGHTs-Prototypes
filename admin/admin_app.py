@@ -4,7 +4,7 @@ Central management interface for all INSIGHTs instances.
 Provides instance management, user administration, and cross-instance analytics.
 
 Run:
-    streamlit run admin_app.py --server.port 8500
+    streamlit run admin/admin_app.py --server.port 8500
 """
 
 import streamlit as st
@@ -128,7 +128,7 @@ DEFAULT_CONFIG = {
     ],
     "users": [],
     "settings": {
-        "base_path": str(Path(__file__).parent),
+        "base_path": str(Path(__file__).parent.parent),
         "python_env": ".venv/bin/activate",
         "auto_start": False,
         "log_level": "INFO"
@@ -199,8 +199,8 @@ def start_instance(instance, base_path):
         return False, f"Port {port} is already in use"
     
     try:
-        # Build command
-        cmd = f"cd {path} && source ../.venv/bin/activate && streamlit run streamlit_app.py --server.port {port} > /dev/null 2>&1 &"
+        # Build command - navigate to base path first, then to instance
+        cmd = f"cd {base_path} && cd {path} && source ../../.venv/bin/activate && streamlit run streamlit_app.py --server.port {port} > /dev/null 2>&1 &"
         subprocess.Popen(cmd, shell=True, executable='/bin/zsh')
         return True, f"Instance started on port {port}"
     except Exception as e:
