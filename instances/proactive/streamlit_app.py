@@ -393,20 +393,12 @@ with tab2:
                 else:
                     st.caption("*Complete analysis with all elements, examples, and detailed recommendations*")
         
-        # Chart Selection with Radio Buttons
+        # Performance Visualizations (All Charts)
         st.markdown("---")
         st.markdown("#### Performance Visualization")
         
         # Load AI feedback context from JSON
         ai_json_data = load_ai_feedback_json()
-        
-        # Radio buttons for chart selection
-        chart_type = st.radio(
-            "Select chart to display:",
-            options=["Domain Scores", "Socratic Dialogue Components", "Speech Quality Metrics"],
-            horizontal=True,
-            key=f"chart_selection_{selected_student}"
-        )
         
         # Use iteration-specific data if selected
         display_df = filtered_df if (view_mode == "Student Dashboard" and iteration != "All Iterations" and not filtered_df.empty) else student_df
@@ -422,82 +414,163 @@ with tab2:
             student_copy[gname] = student_copy[elements].mean(axis=1)
         latest_attempt = student_copy.sort_values('attempt', ascending=False).iloc[0]
         
-        # Display selected chart with descriptive statistics
-        if chart_type == "Domain Scores":
-            # Domain Scores Chart
-            st.markdown("##### Domain Scores (0-4 rubric scale)")
+        # ===== SECTION 1: DOMAIN SCORES =====
+        st.markdown("---")
+        # Domain Scores Chart
+        st.markdown("##### Domain Scores Across Domains (0-4 rubric scale)")
+        st.caption("Performance across all 5 PROaCTIVE domains for each attempt")
+        
+        # Use all student data for visualization
+        student_copy_domains = student_df.copy()
+        
+        # Calculate domain scores for each attempt
+        for gname, elements in GROUPS.items():
+            student_copy_domains[gname] = student_copy_domains[elements].mean(axis=1)
+        
+        # Create readable domain names in order
+        domain_names = [g.replace('PRO_0', '').replace('_', ' ') for g in GROUPS.keys()]
+        domain_keys = list(GROUPS.keys())
+        
+        # Define 15 distinct colors for up to 15 attempts
+        attempt_colors = [
+            '#E74C3C',  # Red
+            '#3498DB',  # Blue
+            '#2ECC71',  # Green
+            '#F39C12',  # Orange
+            '#9B59B6',  # Purple
+            '#1ABC9C',  # Turquoise
+            '#E67E22',  # Dark Orange
+            '#34495E',  # Dark Gray
+            '#E91E63',  # Pink
+            '#00BCD4',  # Cyan
+            '#8E44AD',  # Dark Purple
+            '#16A085',  # Dark Teal
+            '#C0392B',  # Dark Red
+            '#D35400',  # Burnt Orange
+            '#27AE60',  # Dark Green
+        ]
+        
+        # Sort attempts to ensure proper ordering
+        unique_attempts = sorted(student_copy_domains['attempt'].unique())
+        
+        # Create custom colored checkbox interface for attempt selection
+        st.markdown("**Select attempts to display:**")
+        
+        # Create colored checkboxes in a grid layout
+        num_cols = min(5, len(unique_attempts))  # Max 5 columns
+        cols = st.columns(num_cols)
+        
+        selected_attempt_nums = []
+        for idx, attempt_num in enumerate(unique_attempts):
+            col_idx = idx % num_cols
+            with cols[col_idx]:
+                color = attempt_colors[idx % len(attempt_colors)]
+                
+                # Create a colored box with checkbox inside
+                st.markdown(f"""
+                    <div style="
+                        background-color: {color};
+                        padding: 2px;
+                        border-radius: 6px;
+                        margin-bottom: 8px;
+                    ">
+                        <div style="
+                            background-color: {color};
+                            color: white;
+                            text-align: center;
+                            font-weight: bold;
+                            padding: 4px;
+                            border-radius: 4px;
+                        ">
+                            Attempt {attempt_num}
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
+                
+                # Checkbox below the colored box
+                is_selected = st.checkbox(
+                    "Show",
+                    value=True,  # All selected by default
+                    key=f"attempt_checkbox_{attempt_num}_{selected_student}_domain",
+                    label_visibility="collapsed"
+                )
+                
+                if is_selected:
+                    selected_attempt_nums.append(attempt_num)
+        
+        fig = go.Figure()
+        
+        # Create a line for each selected attempt
+        for idx, attempt_num in enumerate(unique_attempts):
+            if attempt_num not in selected_attempt_nums:
+                continue  # Skip unselected attempts
+                
+            attempt_data = student_copy_domains[student_copy_domains['attempt'] == attempt_num].iloc[0]
             
-            # Use JSON data if available, otherwise calculate from dataframe
-            if ai_json_data and 'chart_data' in ai_json_data:
-                group_scores = ai_json_data['chart_data']['domain_scores']
-            else:
-                # Fallback: calculate from dataframe
-                group_scores = {g.replace('PRO_0', '').replace('_', ' '): latest_attempt[g] for g in GROUPS.keys()}
+            # Get scores for each domain for this attempt
+            scores = [attempt_data[domain_key] for domain_key in domain_keys]
             
-            # Define colors for all 5 domains
-            criterion_colors = ['#3498DB', '#2ECC71', '#E67E22', '#9B59B6', '#E74C3C']
+            # Use modulo to cycle colors if more than 15 attempts
+            color = attempt_colors[idx % len(attempt_colors)]
             
-            # Create horizontal bar chart
-            fig = go.Figure()
-            for i, (group_name, score) in enumerate(group_scores.items()):
-                fig.add_trace(go.Bar(
-                    y=[group_name],
-                    x=[score],
-                    orientation='h',
-                    marker_color=criterion_colors[i],
-                    text=f"{score:.1f}",
-                    textposition='inside',
-                    textfont=dict(color='white', size=14, family='Arial Black'),
-                    hovertemplate=f'<b>{group_name}</b><br>Score: {score:.1f}<extra></extra>',
-                    showlegend=False
-                ))
-            
-            fig.update_layout(
-                xaxis_range=[0, 4],
-                xaxis_title='Score',
-                yaxis_title='',
-                height=300,
-                margin=dict(l=20, r=20, t=20, b=20),
-                xaxis=dict(showgrid=True, gridcolor='lightgray', title_font=dict(color='black'), tickfont=dict(color='black')),
-                yaxis=dict(tickfont=dict(color='black', size=12)),
-                plot_bgcolor='white',
-                paper_bgcolor='white',
-                font=dict(color='black')
-            )
-            st.plotly_chart(fig, use_container_width=True)
-            
-            # Descriptive Statistics for Domain Scores
-            st.markdown("##### Descriptive Statistics")
-            
-            # Use JSON data if available, otherwise calculate from dataframe
-            if ai_json_data and 'descriptive_statistics' in ai_json_data:
-                desc_stats = ai_json_data['descriptive_statistics']['domain_scores']
-                stats_data = {
-                    "Statistic": ["Mean", "Median", "Min", "Max", "Range", "Std Dev", "Variance"],
-                    "Value": [
-                        f"{desc_stats['mean']:.2f}",
-                        f"{desc_stats['median']:.2f}",
-                        f"{desc_stats['min']:.2f}",
-                        f"{desc_stats['max']:.2f}",
-                        f"{desc_stats['range']:.2f}",
-                        f"{desc_stats['std']:.2f}",
-                        f"{desc_stats['variance']:.2f}"
-                    ]
-                }
-            else:
-                # Fallback: calculate statistics from dataframe
-                all_scores = [latest_attempt[g] for g in GROUPS.keys()]
-                stats_data = {
-                    "Statistic": ["Mean", "Median", "Mode", "Min", "Max", "Range", "Std Dev", "Variance"],
-                    "Value": [
-                        f"{np.mean(all_scores):.2f}",
-                        f"{np.median(all_scores):.2f}",
-                        f"{pd.Series(all_scores).mode().iloc[0]:.2f}" if not pd.Series(all_scores).mode().empty else "N/A",
-                        f"{np.min(all_scores):.2f}",
-                        f"{np.max(all_scores):.2f}",
-                        f"{np.max(all_scores) - np.min(all_scores):.2f}",
-                    f"{np.std(all_scores, ddof=1):.2f}" if len(all_scores) > 1 else "N/A",
-                    f"{np.var(all_scores, ddof=1):.2f}" if len(all_scores) > 1 else "N/A"
+            fig.add_trace(go.Scatter(
+                x=domain_names,
+                y=scores,
+                mode='lines+markers',
+                name=f'Attempt {attempt_num}',
+                line=dict(color=color, width=2.5),
+                marker=dict(size=8, symbol='circle', line=dict(width=1, color='white')),
+                hovertemplate='<b>%{fullData.name}</b><br>%{x}<br>Score: %{y:.2f}<extra></extra>'
+            ))
+        
+        fig.update_layout(
+            xaxis=dict(
+                title='PROaCTIVE Domain',
+                showgrid=True,
+                gridcolor='rgba(200, 200, 200, 0.3)',
+                title_font=dict(color='#000000', size=12),
+                tickfont=dict(color='#000000', size=10),
+                tickangle=-15
+            ),
+            yaxis=dict(
+                title='Score (0-4 rubric scale)',
+                range=[0, 4.2],
+                showgrid=True,
+                gridcolor='rgba(200, 200, 200, 0.3)',
+                title_font=dict(color='#000000', size=12),
+                tickfont=dict(color='#000000')
+            ),
+            height=400,
+            margin=dict(l=50, r=20, t=20, b=100),
+            plot_bgcolor='white',
+            paper_bgcolor='white',
+            font=dict(color='#000000'),
+            showlegend=False,
+            hovermode='closest'
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Descriptive Statistics for Domain Scores
+        st.markdown("##### Descriptive Statistics")
+        st.caption(f"Statistics for {len(selected_attempt_nums)} selected attempt(s) across all domains")
+        
+        # Calculate statistics from selected attempts only
+        selected_domains_data = student_copy_domains[student_copy_domains['attempt'].isin(selected_attempt_nums)]
+        all_domain_scores = []
+        for domain_key in domain_keys:
+            all_domain_scores.extend(selected_domains_data[domain_key].tolist())
+        
+        if all_domain_scores:
+            stats_data = {
+                "Statistic": ["Mean", "Median", "Min", "Max", "Range", "Std Dev", "Variance"],
+                "Value": [
+                    f"{np.mean(all_domain_scores):.2f}",
+                    f"{np.median(all_domain_scores):.2f}",
+                    f"{np.min(all_domain_scores):.2f}",
+                    f"{np.max(all_domain_scores):.2f}",
+                    f"{np.max(all_domain_scores) - np.min(all_domain_scores):.2f}",
+                    f"{np.std(all_domain_scores, ddof=1):.2f}" if len(all_domain_scores) > 1 else "N/A",
+                    f"{np.var(all_domain_scores, ddof=1):.2f}" if len(all_domain_scores) > 1 else "N/A"
                 ]
             }
             
@@ -506,245 +579,385 @@ with tab2:
                 st.dataframe(pd.DataFrame(stats_data), hide_index=True, use_container_width=True)
             
             with col2:
-                # Frequency distribution
-                st.markdown("**Frequency Distribution**")
-                # Get all_scores from either JSON or group_scores
-                if not (ai_json_data and 'chart_data' in ai_json_data):
-                    all_scores = [latest_attempt[g] for g in GROUPS.keys()]
-                else:
-                    all_scores = list(group_scores.values())
-                freq_data = pd.Series(all_scores).value_counts().sort_index()
-                for score, count in freq_data.items():
-                    st.write(f"Score {score:.1f}: {count} domain(s)")
+                # Summary info
+                st.markdown("**Summary**")
+                st.write(f"Selected Attempts: {len(selected_attempt_nums)}")
+                st.write(f"Domains Tracked: {len(domain_keys)}")
+                st.write(f"Data Points: {len(all_domain_scores)}")
                 
-                if view_mode == "Student Dashboard" and iteration != "All Iterations":
-                    st.info(f"📊 Iteration: {iteration}")
-                elif view_mode == "Student Dashboard" and iteration == "All Iterations":
-                    st.info(f"📊 Showing: All Iterations")
+                # Improvement indicator (only if multiple attempts selected)
+                if len(selected_attempt_nums) > 1:
+                    sorted_selected = sorted(selected_attempt_nums)
+                    first_attempt_avg = student_copy_domains[student_copy_domains['attempt'] == sorted_selected[0]][domain_keys].mean().mean()
+                    last_attempt_avg = student_copy_domains[student_copy_domains['attempt'] == sorted_selected[-1]][domain_keys].mean().mean()
+                    improvement = last_attempt_avg - first_attempt_avg
+                    
+                    if improvement > 0:
+                        st.success(f"📈 Improvement: +{improvement:.2f} points")
+                    elif improvement < 0:
+                        st.warning(f"📉 Change: {improvement:.2f} points")
+                    else:
+                        st.info(f"➡️ No change: {improvement:.2f} points")
+        else:
+            st.info("Please select at least one attempt to view statistics")
         
-        elif chart_type == "Socratic Dialogue Components":
-            # Socratic Components Chart
-            st.markdown("##### Socratic Dialogue Components (0-5.0 scale)")
+        # ===== SECTION 2: SOCRATIC DIALOGUE COMPONENTS =====
+        st.markdown("---")
+        # Socratic Components Chart
+        st.markdown("##### Socratic Dialogue Components Across Components (0-5.0 scale)")
+        st.caption("Performance across all 5 Socratic components for each attempt")
+        
+        # Check if socratic data is available
+        if not student_soc.empty:
+            # Define socratic components
+            socratic_components = {
+                'WONDER': 'socratic_Question_Depth',
+                'REFLECT': 'socratic_Response_Completeness',
+                'REFINE': 'socratic_Assumption_Recognition',
+                'RESTATE': 'socratic_Plan_Flexibility',
+                'REPEAT': 'socratic_In-Encounter_Adjustment'
+            }
             
-            # Use JSON data if available, otherwise calculate from dataframe
-            if ai_json_data and 'chart_data' in ai_json_data:
-                soc_scores = ai_json_data['chart_data']['socratic_scores']
-            else:
-                # Fallback: calculate from dataframe
-                if not student_soc.empty:
-                    socratic_components = {
-                        'WONDER': 'socratic_Question_Depth',
-                        'REFLECT': 'socratic_Response_Completeness',
-                        'REFINE': 'socratic_Assumption_Recognition',
-                        'RESTATE': 'socratic_Plan_Flexibility',
-                        'REPEAT': 'socratic_In-Encounter_Adjustment'
-                    }
-                    
-                    latest_soc = student_soc.sort_values('attempt', ascending=False).iloc[0]
-                    
-                    # Get scores for available components
-                    soc_scores = {}
-                    for component, col_name in socratic_components.items():
-                        if col_name in latest_soc:
-                            soc_scores[component] = latest_soc[col_name]
-                else:
-                    soc_scores = {}
+            # Get component names and column names
+            component_names = list(socratic_components.keys())
+            component_cols = list(socratic_components.values())
             
-            if soc_scores:
-                fig_soc = go.Figure()
-                colors_soc = ['#3498DB', '#2ECC71', '#E67E22', '#9B59B6', '#E74C3C']
+            # Sort attempts to ensure proper ordering
+            unique_soc_attempts = sorted(student_soc['attempt'].unique())
+            
+            # Create custom colored checkbox interface for attempt selection
+            st.markdown("**Select attempts to display:**")
+            
+            # Create colored checkboxes in a grid layout
+            num_cols = min(5, len(unique_soc_attempts))  # Max 5 columns
+            cols = st.columns(num_cols)
+            
+            selected_soc_attempt_nums = []
+            for idx, attempt_num in enumerate(unique_soc_attempts):
+                col_idx = idx % num_cols
+                with cols[col_idx]:
+                    color = attempt_colors[idx % len(attempt_colors)]
+                    
+                    # Create a colored box with checkbox inside
+                    st.markdown(f"""
+                        <div style="
+                            background-color: {color};
+                            padding: 2px;
+                            border-radius: 6px;
+                            margin-bottom: 8px;
+                        ">
+                            <div style="
+                                background-color: {color};
+                                color: white;
+                                text-align: center;
+                                font-weight: bold;
+                                padding: 4px;
+                                border-radius: 4px;
+                            ">
+                                Attempt {attempt_num}
+                            </div>
+                        </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # Checkbox below the colored box
+                    is_selected = st.checkbox(
+                        "Show",
+                        value=True,  # All selected by default
+                        key=f"attempt_checkbox_{attempt_num}_{selected_student}_socratic",
+                        label_visibility="collapsed"
+                    )
+                    
+                    if is_selected:
+                        selected_soc_attempt_nums.append(attempt_num)
+            
+            fig_soc = go.Figure()
+            
+            # Create a line for each selected attempt
+            for idx, attempt_num in enumerate(unique_soc_attempts):
+                if attempt_num not in selected_soc_attempt_nums:
+                    continue  # Skip unselected attempts
+                    
+                attempt_soc_data = student_soc[student_soc['attempt'] == attempt_num].iloc[0]
                 
-                for i, (component, score) in enumerate(soc_scores.items()):
-                    fig_soc.add_trace(go.Bar(
-                        x=[component],
-                        y=[score],
-                        marker_color=colors_soc[i],
-                        text=f"{score:.1f}",
-                        textposition='outside',
-                        textfont=dict(size=14, family='Arial Black'),
-                        hovertemplate=f'<b>{component}</b><br>Score: {score:.1f}<extra></extra>',
-                        showlegend=False
-                    ))
+                # Get scores for each component for this attempt
+                scores = []
+                for col_name in component_cols:
+                    if col_name in attempt_soc_data:
+                        scores.append(attempt_soc_data[col_name])
+                    else:
+                        scores.append(0)  # Default to 0 if not available
                 
-                fig_soc.update_layout(
-                    yaxis_range=[0, 5.5],
-                    yaxis_title='Score',
-                    xaxis_title='',
-                    height=300,
-                    margin=dict(l=20, r=20, t=20, b=20),
-                    yaxis=dict(showgrid=True, gridcolor='lightgray', title_font=dict(color='black'), tickfont=dict(color='black')),
-                    xaxis=dict(tickfont=dict(size=11, color='black')),
-                    plot_bgcolor='white',
-                    paper_bgcolor='white',
-                    font=dict(color='black')
-                )
-                st.plotly_chart(fig_soc, use_container_width=True)
+                # Use modulo to cycle colors if more than 15 attempts
+                color = attempt_colors[idx % len(attempt_colors)]
                 
-                # Descriptive Statistics for Socratic Components
-                st.markdown("##### Descriptive Statistics")
-                
-                # Use JSON data if available, otherwise calculate from scores
-                if ai_json_data and 'descriptive_statistics' in ai_json_data:
-                    desc_stats_soc = ai_json_data['descriptive_statistics']['socratic_scores']
-                    stats_data_soc = {
-                        "Statistic": ["Mean", "Median", "Min", "Max", "Range", "Std Dev", "Variance"],
-                        "Value": [
-                            f"{desc_stats_soc['mean']:.2f}",
-                            f"{desc_stats_soc['median']:.2f}",
-                            f"{desc_stats_soc['min']:.2f}",
-                            f"{desc_stats_soc['max']:.2f}",
-                            f"{desc_stats_soc['range']:.2f}",
-                            f"{desc_stats_soc['std']:.2f}",
-                            f"{desc_stats_soc['variance']:.2f}"
-                        ]
-                    }
-                else:
-                    # Fallback: calculate statistics from scores
-                    all_soc_scores = list(soc_scores.values())
-                    stats_data_soc = {
-                        "Statistic": ["Mean", "Median", "Mode", "Min", "Max", "Range", "Std Dev", "Variance"],
-                        "Value": [
-                            f"{np.mean(all_soc_scores):.2f}",
-                            f"{np.median(all_soc_scores):.2f}",
-                            f"{pd.Series(all_soc_scores).mode().iloc[0]:.2f}" if not pd.Series(all_soc_scores).mode().empty else "N/A",
-                            f"{np.min(all_soc_scores):.2f}",
-                            f"{np.max(all_soc_scores):.2f}",
-                            f"{np.max(all_soc_scores) - np.min(all_soc_scores):.2f}",
-                            f"{np.std(all_soc_scores, ddof=1):.2f}" if len(all_soc_scores) > 1 else "N/A",
-                            f"{np.var(all_soc_scores, ddof=1):.2f}" if len(all_soc_scores) > 1 else "N/A"
-                        ]
-                    }
+                fig_soc.add_trace(go.Scatter(
+                    x=component_names,
+                    y=scores,
+                    mode='lines+markers',
+                    name=f'Attempt {attempt_num}',
+                    line=dict(color=color, width=2.5),
+                    marker=dict(size=8, symbol='circle', line=dict(width=1, color='white')),
+                    hovertemplate='<b>%{fullData.name}</b><br>%{x}<br>Score: %{y:.2f}<extra></extra>'
+                ))
+            
+            fig_soc.update_layout(
+                xaxis=dict(
+                    title='Socratic Component',
+                    showgrid=True,
+                    gridcolor='rgba(200, 200, 200, 0.3)',
+                    title_font=dict(color='#000000', size=12),
+                    tickfont=dict(color='#000000', size=10)
+                ),
+                yaxis=dict(
+                    title='Score (0-5.0 scale)',
+                    range=[0, 5.5],
+                    showgrid=True,
+                    gridcolor='rgba(200, 200, 200, 0.3)',
+                    title_font=dict(color='#000000', size=12),
+                    tickfont=dict(color='#000000')
+                ),
+                height=400,
+                margin=dict(l=50, r=20, t=20, b=100),
+                plot_bgcolor='white',
+                paper_bgcolor='white',
+                font=dict(color='#000000'),
+                showlegend=False,
+                hovermode='closest'
+            )
+            st.plotly_chart(fig_soc, use_container_width=True)
+            
+            # Descriptive Statistics for Socratic Components
+            st.markdown("##### Descriptive Statistics")
+            st.caption(f"Statistics for {len(selected_soc_attempt_nums)} selected attempt(s) across all components")
+            
+            # Calculate statistics from selected attempts only
+            selected_soc_data = student_soc[student_soc['attempt'].isin(selected_soc_attempt_nums)]
+            all_soc_scores = []
+            for col_name in component_cols:
+                if col_name in selected_soc_data.columns:
+                    all_soc_scores.extend(selected_soc_data[col_name].dropna().tolist())
+            
+            if all_soc_scores:
+                stats_data_soc = {
+                    "Statistic": ["Mean", "Median", "Min", "Max", "Range", "Std Dev", "Variance"],
+                    "Value": [
+                        f"{np.mean(all_soc_scores):.2f}",
+                        f"{np.median(all_soc_scores):.2f}",
+                        f"{np.min(all_soc_scores):.2f}",
+                        f"{np.max(all_soc_scores):.2f}",
+                        f"{np.max(all_soc_scores) - np.min(all_soc_scores):.2f}",
+                        f"{np.std(all_soc_scores, ddof=1):.2f}" if len(all_soc_scores) > 1 else "N/A",
+                        f"{np.var(all_soc_scores, ddof=1):.2f}" if len(all_soc_scores) > 1 else "N/A"
+                    ]
+                }
                 
                 col1, col2 = st.columns(2)
                 with col1:
                     st.dataframe(pd.DataFrame(stats_data_soc), hide_index=True, use_container_width=True)
                 
                 with col2:
-                    # Frequency distribution
-                    st.markdown("**Frequency Distribution**")
-                    all_soc_scores = list(soc_scores.values())
-                    freq_data_soc = pd.Series(all_soc_scores).value_counts().sort_index()
-                    for score, count in freq_data_soc.items():
-                        st.write(f"Score {score:.1f}: {count} component(s)")
+                    # Summary info
+                    st.markdown("**Summary**")
+                    st.write(f"Selected Attempts: {len(selected_soc_attempt_nums)}")
+                    st.write(f"Components Tracked: {len(component_names)}")
+                    st.write(f"Data Points: {len(all_soc_scores)}")
                     
-                    if view_mode == "Student Dashboard" and iteration != "All Iterations":
-                        st.info(f"📊 Iteration: {iteration}")
-                    elif view_mode == "Student Dashboard" and iteration == "All Iterations":
-                        st.info(f"📊 Showing: All Iterations")
+                    # Improvement indicator (only if multiple attempts selected)
+                    if len(selected_soc_attempt_nums) > 1:
+                        sorted_selected_soc = sorted(selected_soc_attempt_nums)
+                        first_attempt_avg = student_soc[student_soc['attempt'] == sorted_selected_soc[0]][component_cols].mean().mean()
+                        last_attempt_avg = student_soc[student_soc['attempt'] == sorted_selected_soc[-1]][component_cols].mean().mean()
+                        improvement = last_attempt_avg - first_attempt_avg
+                        
+                        if improvement > 0:
+                            st.success(f"📈 Improvement: +{improvement:.2f} points")
+                        elif improvement < 0:
+                            st.warning(f"📉 Change: {improvement:.2f} points")
+                        else:
+                            st.info(f"➡️ No change: {improvement:.2f} points")
             else:
-                st.info("Socratic component data not available for this student/iteration")
+                st.info("Please select at least one attempt to view statistics")
+        else:
+            st.info("Socratic component data not available for this student/iteration")
         
-        else:  # Speech Quality Metrics
-            st.markdown("##### Speech Quality Metrics (0-10 scale)")
+        # ===== SECTION 3: SPEECH QUALITY METRICS =====
+        st.markdown("---")
+        st.markdown("##### Speech Quality Metrics Across Metrics (0-10 scale)")
+        st.caption("Performance across all 4 speech quality metrics for each attempt")
+        
+        # Check if speech data is available
+        if not student_soc.empty:
+            # Define speech metrics
+            speech_metrics = {
+                'Volume': 'speech_volume',
+                'Pace': 'speech_pace',
+                'Pitch': 'speech_pitch',
+                'Pauses': 'speech_pauses'
+            }
             
-            # Use JSON data if available, otherwise calculate from dataframe
-            if ai_json_data and 'chart_data' in ai_json_data:
-                speech_scores = ai_json_data['chart_data']['speech_scores']
-            else:
-                # Fallback: calculate from dataframe
-                if not student_soc.empty:
-                    speech_metrics = {
-                        'Volume': 'speech_volume',
-                        'Pace': 'speech_pace',
-                        'Pitch': 'speech_pitch',
-                        'Pauses': 'speech_pauses'
-                    }
-                    
-                    latest_soc = student_soc.sort_values('attempt', ascending=False).iloc[0]
-                    
-                    # Get scores for available metrics
-                    speech_scores = {}
-                    for metric_name, col_name in speech_metrics.items():
-                        if col_name in latest_soc and pd.notna(latest_soc[col_name]):
-                            speech_scores[metric_name] = latest_soc[col_name]
-                else:
-                    speech_scores = {}
+            # Get metric names and column names
+            metric_names = list(speech_metrics.keys())
+            metric_cols = list(speech_metrics.values())
             
-            if speech_scores:
-                fig_speech = go.Figure()
-                colors_speech = ['#3498DB', '#2ECC71', '#E67E22', '#9B59B6']
+            # Sort attempts to ensure proper ordering
+            unique_speech_attempts = sorted(student_soc['attempt'].unique())
+            
+            # Create custom colored checkbox interface for attempt selection
+            st.markdown("**Select attempts to display:**")
+            
+            # Create colored checkboxes in a grid layout
+            num_cols = min(5, len(unique_speech_attempts))  # Max 5 columns
+            cols = st.columns(num_cols)
+            
+            selected_speech_attempt_nums = []
+            for idx, attempt_num in enumerate(unique_speech_attempts):
+                col_idx = idx % num_cols
+                with cols[col_idx]:
+                    color = attempt_colors[idx % len(attempt_colors)]
+                    
+                    # Create a colored box with checkbox inside
+                    st.markdown(f"""
+                        <div style="
+                            background-color: {color};
+                            padding: 2px;
+                            border-radius: 6px;
+                            margin-bottom: 8px;
+                        ">
+                            <div style="
+                                background-color: {color};
+                                color: white;
+                                text-align: center;
+                                font-weight: bold;
+                                padding: 4px;
+                                border-radius: 4px;
+                            ">
+                                Attempt {attempt_num}
+                            </div>
+                        </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # Checkbox below the colored box
+                    is_selected = st.checkbox(
+                        "Show",
+                        value=True,  # All selected by default
+                        key=f"attempt_checkbox_{attempt_num}_{selected_student}_speech",
+                        label_visibility="collapsed"
+                    )
+                    
+                    if is_selected:
+                        selected_speech_attempt_nums.append(attempt_num)
+            
+            fig_speech = go.Figure()
+            
+            # Create a line for each selected attempt
+            for idx, attempt_num in enumerate(unique_speech_attempts):
+                if attempt_num not in selected_speech_attempt_nums:
+                    continue  # Skip unselected attempts
+                    
+                attempt_speech_data = student_soc[student_soc['attempt'] == attempt_num].iloc[0]
                 
-                for i, (metric, score) in enumerate(speech_scores.items()):
-                    fig_speech.add_trace(go.Bar(
-                        x=[metric],
-                        y=[score],
-                        marker_color=colors_speech[i],
-                        text=f"{score:.1f}",
-                        textposition='outside',
-                        textfont=dict(size=14, family='Arial Black'),
-                        hovertemplate=f'<b>{metric}</b><br>Score: {score:.1f}<extra></extra>',
-                        showlegend=False
-                    ))
+                # Get scores for each metric for this attempt
+                scores = []
+                for col_name in metric_cols:
+                    if col_name in attempt_speech_data and pd.notna(attempt_speech_data[col_name]):
+                        scores.append(attempt_speech_data[col_name])
+                    else:
+                        scores.append(0)  # Default to 0 if not available
                 
-                fig_speech.update_layout(
-                    yaxis_range=[0, 11],
-                    yaxis_title='Score',
-                    xaxis_title='',
-                    height=300,
-                    margin=dict(l=20, r=20, t=20, b=20),
-                    yaxis=dict(showgrid=True, gridcolor='lightgray', title_font=dict(color='black'), tickfont=dict(color='black')),
-                    xaxis=dict(tickfont=dict(color='black')),
-                    plot_bgcolor='white',
-                    paper_bgcolor='white',
-                    font=dict(color='black')
-                )
-                st.plotly_chart(fig_speech, use_container_width=True)
+                # Use modulo to cycle colors if more than 15 attempts
+                color = attempt_colors[idx % len(attempt_colors)]
                 
-                # Descriptive Statistics for Speech Metrics
-                st.markdown("##### Descriptive Statistics")
-                
-                # Use JSON data if available, otherwise calculate from scores
-                if ai_json_data and 'descriptive_statistics' in ai_json_data:
-                    desc_stats_speech = ai_json_data['descriptive_statistics']['speech_scores']
-                    stats_data_speech = {
-                        "Statistic": ["Mean", "Median", "Min", "Max", "Range", "Std Dev", "Variance"],
-                        "Value": [
-                            f"{desc_stats_speech['mean']:.2f}",
-                            f"{desc_stats_speech['median']:.2f}",
-                            f"{desc_stats_speech['min']:.2f}",
-                            f"{desc_stats_speech['max']:.2f}",
-                            f"{desc_stats_speech['range']:.2f}",
-                            f"{desc_stats_speech['std']:.2f}",
-                            f"{desc_stats_speech['variance']:.2f}"
-                        ]
-                    }
-                else:
-                    # Fallback: calculate statistics from scores
-                    all_speech_scores = list(speech_scores.values())
-                    stats_data_speech = {
-                        "Statistic": ["Mean", "Median", "Mode", "Min", "Max", "Range", "Std Dev", "Variance"],
-                        "Value": [
-                            f"{np.mean(all_speech_scores):.2f}",
-                            f"{np.median(all_speech_scores):.2f}",
-                            f"{pd.Series(all_speech_scores).mode().iloc[0]:.2f}" if not pd.Series(all_speech_scores).mode().empty else "N/A",
-                            f"{np.min(all_speech_scores):.2f}",
-                            f"{np.max(all_speech_scores):.2f}",
-                            f"{np.max(all_speech_scores) - np.min(all_speech_scores):.2f}",
-                            f"{np.std(all_speech_scores, ddof=1):.2f}" if len(all_speech_scores) > 1 else "N/A",
-                            f"{np.var(all_speech_scores, ddof=1):.2f}" if len(all_speech_scores) > 1 else "N/A"
-                        ]
-                    }
+                fig_speech.add_trace(go.Scatter(
+                    x=metric_names,
+                    y=scores,
+                    mode='lines+markers',
+                    name=f'Attempt {attempt_num}',
+                    line=dict(color=color, width=2.5),
+                    marker=dict(size=8, symbol='circle', line=dict(width=1, color='white')),
+                    hovertemplate='<b>%{fullData.name}</b><br>%{x}<br>Score: %{y:.2f}<extra></extra>'
+                ))
+            
+            fig_speech.update_layout(
+                xaxis=dict(
+                    title='Speech Quality Metric',
+                    showgrid=True,
+                    gridcolor='rgba(200, 200, 200, 0.3)',
+                    title_font=dict(color='#000000', size=12),
+                    tickfont=dict(color='#000000', size=10)
+                ),
+                yaxis=dict(
+                    title='Score (0-10 scale)',
+                    range=[0, 11],
+                    showgrid=True,
+                    gridcolor='rgba(200, 200, 200, 0.3)',
+                    title_font=dict(color='#000000', size=12),
+                    tickfont=dict(color='#000000')
+                ),
+                height=400,
+                margin=dict(l=50, r=20, t=20, b=100),
+                plot_bgcolor='white',
+                paper_bgcolor='white',
+                font=dict(color='#000000'),
+                showlegend=False,
+                hovermode='closest'
+            )
+            st.plotly_chart(fig_speech, use_container_width=True)
+            
+            # Descriptive Statistics for Speech Metrics
+            st.markdown("##### Descriptive Statistics")
+            st.caption(f"Statistics for {len(selected_speech_attempt_nums)} selected attempt(s) across all metrics")
+            
+            # Calculate statistics from selected attempts only
+            selected_speech_data = student_soc[student_soc['attempt'].isin(selected_speech_attempt_nums)]
+            all_speech_scores = []
+            for col_name in metric_cols:
+                if col_name in selected_speech_data.columns:
+                    all_speech_scores.extend(selected_speech_data[col_name].dropna().tolist())
+            
+            if all_speech_scores:
+                stats_data_speech = {
+                    "Statistic": ["Mean", "Median", "Min", "Max", "Range", "Std Dev", "Variance"],
+                    "Value": [
+                        f"{np.mean(all_speech_scores):.2f}",
+                        f"{np.median(all_speech_scores):.2f}",
+                        f"{np.min(all_speech_scores):.2f}",
+                        f"{np.max(all_speech_scores):.2f}",
+                        f"{np.max(all_speech_scores) - np.min(all_speech_scores):.2f}",
+                        f"{np.std(all_speech_scores, ddof=1):.2f}" if len(all_speech_scores) > 1 else "N/A",
+                        f"{np.var(all_speech_scores, ddof=1):.2f}" if len(all_speech_scores) > 1 else "N/A"
+                    ]
+                }
                 
                 col1, col2 = st.columns(2)
                 with col1:
                     st.dataframe(pd.DataFrame(stats_data_speech), hide_index=True, use_container_width=True)
                 
                 with col2:
-                    # Frequency distribution
-                    st.markdown("**Frequency Distribution**")
-                    all_speech_scores = list(speech_scores.values())
-                    freq_data_speech = pd.Series(all_speech_scores).value_counts().sort_index()
-                    for score, count in freq_data_speech.items():
-                        st.write(f"Score {score:.1f}: {count} metric(s)")
+                    # Summary info
+                    st.markdown("**Summary**")
+                    st.write(f"Selected Attempts: {len(selected_speech_attempt_nums)}")
+                    st.write(f"Metrics Tracked: {len(metric_names)}")
+                    st.write(f"Data Points: {len(all_speech_scores)}")
                     
-                    if view_mode == "Student Dashboard" and iteration != "All Iterations":
-                        st.info(f"📊 Iteration: {iteration}")
-                    elif view_mode == "Student Dashboard" and iteration == "All Iterations":
-                        st.info(f"📊 Showing: All Iterations")
+                    # Improvement indicator (only if multiple attempts selected)
+                    if len(selected_speech_attempt_nums) > 1:
+                        sorted_selected_speech = sorted(selected_speech_attempt_nums)
+                        first_attempt_avg = student_soc[student_soc['attempt'] == sorted_selected_speech[0]][metric_cols].mean().mean()
+                        last_attempt_avg = student_soc[student_soc['attempt'] == sorted_selected_speech[-1]][metric_cols].mean().mean()
+                        improvement = last_attempt_avg - first_attempt_avg
+                        
+                        if improvement > 0:
+                            st.success(f"📈 Improvement: +{improvement:.2f} points")
+                        elif improvement < 0:
+                            st.warning(f"📉 Change: {improvement:.2f} points")
+                        else:
+                            st.info(f"➡️ No change: {improvement:.2f} points")
                 
                 st.caption("ℹ️ Speech quality assessed from encounter recording")
             else:
-                st.info("Speech quality data not available for this student/iteration")
+                st.info("Please select at least one attempt to view statistics")
+        else:
+            st.info("Speech quality data not available for this student/iteration")
         
         # AI-Generated Descriptive Feedback Section
         st.markdown("---")
