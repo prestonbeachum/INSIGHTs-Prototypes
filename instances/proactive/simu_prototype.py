@@ -439,6 +439,397 @@ def generate_socratic_metrics(students, seed=RANDOM_SEED, num_attempts=5):
     return df_long, df_wide
 
 
+def generate_ai_feedback_context(student_id, attempt, domain_scores, socratic_scores, speech_scores, encounter_completeness, seed=RANDOM_SEED):
+    """Generate rich contextual data for AI-powered feedback generation.
+    
+    This function creates interpretable data structures that can be used to generate
+    qualitative descriptive feedback based on quantitative performance data.
+    
+    Args:
+        student_id: Student identifier
+        attempt: Attempt number
+        domain_scores: Dict mapping domain names to average scores (0-4 scale)
+        socratic_scores: Dict mapping Socratic component names to scores (0-5 scale)
+        speech_scores: Dict mapping speech metrics to scores (0-10 scale)
+        encounter_completeness: Dict mapping encounter elements to completion status (0 or 1)
+        seed: Random seed for reproducibility
+        
+    Returns:
+        Dict containing contextual data for AI feedback generation
+    """
+    # Create deterministic but valid seed from student_id and attempt
+    combined_seed = (seed + abs(hash(student_id)) + attempt) % (2**32 - 1)
+    random.seed(combined_seed)
+    np.random.seed(combined_seed)
+    
+    context = {
+        "student_id": student_id,
+        "attempt": attempt,
+        "timestamp": f"2025-11-{20 + attempt:02d}",  # Mock timestamp
+        
+        # Raw chart data for visualization
+        "chart_data": {
+            "domain_scores": domain_scores,
+            "socratic_scores": socratic_scores,
+            "speech_scores": speech_scores
+        },
+        
+        # Performance summary
+        "domain_performance": {},
+        "socratic_performance": {},
+        "speech_performance": {},
+        "encounter_completeness": encounter_completeness,
+        
+        # Descriptive statistics
+        "descriptive_statistics": {
+            "domain_scores": {},
+            "socratic_scores": {},
+            "speech_scores": {}
+        },
+        
+        # Strengths and areas for growth
+        "top_strengths": [],
+        "growth_areas": [],
+        
+        # Patterns and trends
+        "patterns": [],
+        
+        # Specific examples (mock qualitative observations)
+        "observed_behaviors": [],
+    }
+    
+    # Calculate descriptive statistics for domain scores
+    domain_values = list(domain_scores.values())
+    if domain_values:
+        context["descriptive_statistics"]["domain_scores"] = {
+            "mean": round(np.mean(domain_values), 2),
+            "median": round(np.median(domain_values), 2),
+            "std": round(np.std(domain_values), 2),
+            "variance": round(np.var(domain_values), 2),
+            "min": round(min(domain_values), 2),
+            "max": round(max(domain_values), 2),
+            "range": round(max(domain_values) - min(domain_values), 2)
+        }
+    
+    # Calculate descriptive statistics for socratic scores
+    socratic_values = list(socratic_scores.values())
+    if socratic_values:
+        context["descriptive_statistics"]["socratic_scores"] = {
+            "mean": round(np.mean(socratic_values), 2),
+            "median": round(np.median(socratic_values), 2),
+            "std": round(np.std(socratic_values), 2),
+            "variance": round(np.var(socratic_values), 2),
+            "min": round(min(socratic_values), 2),
+            "max": round(max(socratic_values), 2),
+            "range": round(max(socratic_values) - min(socratic_values), 2)
+        }
+    
+    # Calculate descriptive statistics for speech scores
+    speech_values = list(speech_scores.values())
+    if speech_values:
+        context["descriptive_statistics"]["speech_scores"] = {
+            "mean": round(np.mean(speech_values), 2),
+            "median": round(np.median(speech_values), 2),
+            "std": round(np.std(speech_values), 2),
+            "variance": round(np.var(speech_values), 2),
+            "min": round(min(speech_values), 2),
+            "max": round(max(speech_values), 2),
+            "range": round(max(speech_values) - min(speech_values), 2)
+        }
+    
+    # Analyze domain scores
+    for domain, score in domain_scores.items():
+        domain_clean = domain.replace("PRO_0", "").replace("_", " ").replace("1 ", "").replace("2 ", "").replace("3 ", "").replace("4 ", "").replace("5 ", "")
+        
+        # Determine proficiency level
+        if score >= 3.5:
+            level = "Advanced"
+            descriptor = "consistently demonstrates sophisticated application"
+        elif score >= 2.5:
+            level = "Proficient"
+            descriptor = "shows solid competence with regular effective application"
+        elif score >= 1.5:
+            level = "Emerging"
+            descriptor = "demonstrates growing capability with some inconsistency"
+        else:
+            level = "Developing"
+            descriptor = "beginning to incorporate skills, primarily foundational"
+            
+        context["domain_performance"][domain_clean] = {
+            "score": round(score, 1),
+            "level": level,
+            "descriptor": descriptor
+        }
+        
+        # Identify strengths (scores >= 3.0)
+        if score >= 3.0:
+            context["top_strengths"].append({
+                "domain": domain_clean,
+                "score": round(score, 1),
+                "note": f"Strong {level.lower()} performance in {domain_clean.lower()}"
+            })
+        
+        # Identify growth areas (scores < 2.5)
+        elif score < 2.5:
+            context["growth_areas"].append({
+                "domain": domain_clean,
+                "score": round(score, 1),
+                "note": f"Opportunity to develop {domain_clean.lower()} skills"
+            })
+    
+    # Analyze Socratic components (WONDER, REFLECT, REFINE, RESTATE, REPEAT framework)
+    socratic_components = {
+        "WONDER": ["Question Depth"],
+        "REFLECT": ["Response Completeness"],
+        "REFINE": ["Assumption Recognition"],
+        "RESTATE": ["Plan Flexibility"],
+        "REPEAT": ["In-Encounter Adjustment"]
+    }
+    
+    for component, metrics in socratic_components.items():
+        scores = [socratic_scores.get(m, 0) for m in metrics if m in socratic_scores]
+        if scores:
+            avg_score = np.mean(scores)
+            context["socratic_performance"][component] = {
+                "score": round(avg_score, 1),
+                "interpretation": "strong" if avg_score >= 3.5 else "developing" if avg_score < 2.5 else "adequate"
+            }
+    
+    # Analyze speech quality
+    for metric, score in speech_scores.items():
+        if score >= 8.5:
+            quality = "excellent"
+        elif score >= 7.0:
+            quality = "good"
+        elif score >= 5.5:
+            quality = "adequate"
+        else:
+            quality = "needs attention"
+            
+        context["speech_performance"][metric] = {
+            "score": round(score, 1),
+            "quality": quality
+        }
+    
+    # Generate pattern observations
+    avg_domain = np.mean(list(domain_scores.values()))
+    avg_socratic = np.mean([s.get("score", 0) for s in context["socratic_performance"].values()])
+    
+    if avg_domain > avg_socratic * 0.8:  # Assuming 0-4 vs 0-5 scale
+        context["patterns"].append({
+            "type": "alignment",
+            "observation": "Domain performance aligns well with Socratic dialogue skills"
+        })
+    else:
+        context["patterns"].append({
+            "type": "gap",
+            "observation": "Opportunity to better integrate Socratic techniques into clinical domains"
+        })
+    
+    # Mock observed behaviors based on scores
+    behaviors = []
+    
+    # Question formulation behaviors
+    if "Question Formulation" in [d for d in context["top_strengths"]]:
+        behaviors.append({
+            "category": "Question Formulation",
+            "observation": "Asked open-ended questions that invited patient elaboration",
+            "timestamp": "00:02:15"
+        })
+    elif any("Question Formulation" in g["domain"] for g in context["growth_areas"]):
+        behaviors.append({
+            "category": "Question Formulation",
+            "observation": "Primarily used closed-ended questions limiting patient narrative",
+            "timestamp": "00:02:15"
+        })
+    
+    # Response quality behaviors
+    response_score = domain_scores.get("PRO_02_Response_Quality", 0)
+    if response_score >= 3.0:
+        behaviors.append({
+            "category": "Response Quality",
+            "observation": "Demonstrated reflective pausing before responding to patient statements",
+            "timestamp": "00:05:42"
+        })
+    else:
+        behaviors.append({
+            "category": "Response Quality",
+            "observation": "Responses occasionally interrupted patient's train of thought",
+            "timestamp": "00:05:42"
+        })
+    
+    # Critical thinking behaviors
+    critical_score = domain_scores.get("PRO_03_Critical_Thinking", 0)
+    if critical_score >= 3.0:
+        behaviors.append({
+            "category": "Critical Thinking",
+            "observation": "Verbalized clinical reasoning process in patient-friendly language",
+            "timestamp": "00:08:20"
+        })
+    
+    # Partnership behaviors
+    partnership_score = domain_scores.get("PRO_04_Humility_Partnership", 0)
+    if partnership_score >= 3.0:
+        behaviors.append({
+            "category": "Partnership",
+            "observation": "Used partnership language when discussing care plan options",
+            "timestamp": "00:11:05"
+        })
+    elif partnership_score < 2.5:
+        behaviors.append({
+            "category": "Partnership",
+            "observation": "Primarily directive approach with limited patient input on care decisions",
+            "timestamp": "00:11:05"
+        })
+    
+    context["observed_behaviors"] = behaviors
+    
+    # Sort strengths and growth areas by score
+    context["top_strengths"].sort(key=lambda x: x["score"], reverse=True)
+    context["growth_areas"].sort(key=lambda x: x["score"])
+    
+    # Generate comprehensive feedback sections
+    context["what_student_did_well"] = generate_what_went_well(domain_scores, socratic_scores, speech_scores, context)
+    context["areas_for_improvement"] = generate_areas_for_improvement(domain_scores, socratic_scores, speech_scores, context)
+    
+    return context
+
+
+def generate_what_went_well(domain_scores, socratic_scores, speech_scores, context):
+    """Generate detailed 'What the student did well' feedback."""
+    feedback = []
+    
+    # Speech quality and delivery
+    avg_speech = np.mean(list(speech_scores.values()))
+    if avg_speech >= 7.0:
+        speech_details = []
+        if speech_scores.get("volume", 0) >= 7.0:
+            speech_details.append("maintained an appropriate volume throughout, ensuring clear audibility")
+        if speech_scores.get("pace", 0) >= 7.0:
+            speech_details.append("maintained a well-paced professional rate that allowed the patient to process information")
+        if speech_scores.get("pitch", 0) >= 7.0:
+            speech_details.append("varied pitch and intonation effectively to convey empathy and engagement")
+        if speech_scores.get("pauses", 0) >= 7.0:
+            speech_details.append("used meaningful pauses that allowed patient reflection")
+        
+        if speech_details:
+            feedback.append({
+                "category": "Speech Quality and Delivery",
+                "details": "The student " + ", ".join(speech_details) + ". This approach enhanced patient comfort and comprehension throughout the encounter."
+            })
+    
+    # Socratic dialogue
+    wonder_score = socratic_scores.get("Question Depth", 0)
+    reflect_score = socratic_scores.get("Response Completeness", 0)
+    refine_score = socratic_scores.get("Assumption Recognition", 0)
+    
+    if wonder_score >= 3.0 or reflect_score >= 3.0:
+        socratic_details = []
+        if wonder_score >= 3.0:
+            socratic_details.append("demonstrated strong curiosity by frequently asking open-ended questions")
+        if reflect_score >= 3.0:
+            socratic_details.append("showed reflective listening with empathetic acknowledgments and summarizing")
+        if refine_score >= 3.0:
+            socratic_details.append("skillfully refined patient responses to clarify meaning")
+        
+        if socratic_details:
+            feedback.append({
+                "category": "Socratic Dialogue",
+                "details": "The student " + ", ".join(socratic_details) + ". This approach helped deepen patient engagement and understanding."
+            })
+    
+    # Clinical reasoning and shared decision making
+    critical_score = domain_scores.get("PRO_03_Critical_Thinking", 0)
+    partnership_score = domain_scores.get("PRO_04_Humility_Partnership", 0)
+    
+    if critical_score >= 2.5 or partnership_score >= 2.5:
+        clinical_details = []
+        if critical_score >= 2.5:
+            clinical_details.append("demonstrated thoughtful clinical reasoning with transparent explanation of decision-making")
+        if partnership_score >= 2.5:
+            clinical_details.append("showed humility and partnership by inviting patient input on care decisions")
+            clinical_details.append("validated patient concerns respectfully and communicated uncertainty constructively")
+        
+        if clinical_details:
+            feedback.append({
+                "category": "Clinical Reasoning and Shared Decision Making",
+                "details": "The student " + ", ".join(clinical_details) + "."
+            })
+    
+    # Patient-centered communication
+    question_score = domain_scores.get("PRO_01_Question_Formulation", 0)
+    response_score = domain_scores.get("PRO_02_Response_Quality", 0)
+    
+    if question_score >= 2.5 or response_score >= 2.5:
+        communication_details = []
+        if question_score >= 2.5:
+            communication_details.append("consistently avoided jargon and used accessible language")
+        if response_score >= 2.5:
+            communication_details.append("provided empathic acknowledgment that helped build rapport and trust")
+        communication_details.append("encouraged patient agency in decision-making")
+        
+        feedback.append({
+            "category": "Patient-Centered Communication",
+            "details": "The student " + ", ".join(communication_details) + "."
+        })
+    
+    return feedback
+
+
+def generate_areas_for_improvement(domain_scores, socratic_scores, speech_scores, context):
+    """Generate detailed 'Areas for improvement' feedback."""
+    feedback = []
+    
+    # Speech quality improvements
+    avg_speech = np.mean(list(speech_scores.values()))
+    if avg_speech < 8.5:
+        speech_improvements = []
+        if speech_scores.get("pace", 0) < 8.5:
+            speech_improvements.append("slightly slower delivery and longer reflective pauses could permit deeper patient processing, especially after emotionally charged questions")
+        if speech_scores.get("pitch", 0) < 8.5:
+            speech_improvements.append("enhancing pitch variation to emphasize key points more dramatically could increase engagement")
+        
+        if speech_improvements:
+            feedback.append({
+                "category": "Speech Quality and Delivery",
+                "details": "While overall delivery was appropriate, " + " Additionally, ".join(speech_improvements) + "."
+            })
+    
+    # Reflective practice
+    reflective_score = domain_scores.get("PRO_05_Reflective_Practice", 0)
+    if reflective_score < 3.0:
+        feedback.append({
+            "category": "Reflective Practice and Self-Awareness",
+            "details": "The student showed some adaptive responses but could improve by actively recognizing and verbalizing personal biases or assumptions during the encounter. More overt in-encounter adjustments based on patient cues could enhance responsiveness."
+        })
+    
+    # Clinical reasoning transparency
+    critical_score = domain_scores.get("PRO_03_Critical_Thinking", 0)
+    if critical_score < 3.5:
+        feedback.append({
+            "category": "Clinical Reasoning Transparency",
+            "details": "While the student shared clinical thinking, further explaining the rationale behind each suggested test or treatment option in more detail could improve patient understanding and engagement. Clarifying why specific approaches are prioritized would be beneficial."
+        })
+    
+    # Question formulation
+    question_score = domain_scores.get("PRO_01_Question_Formulation", 0)
+    if question_score < 3.0:
+        feedback.append({
+            "category": "Question Formulation",
+            "details": "Greater use of open-ended questions and deeper exploration of patient perspectives could enhance information gathering. Consider asking more 'why' and 'how' questions to understand patient reasoning and concerns."
+        })
+    
+    # Response quality
+    response_score = domain_scores.get("PRO_02_Response_Quality", 0)
+    if response_score < 3.0:
+        feedback.append({
+            "category": "Active Listening and Response Quality",
+            "details": "More consistent use of reflective pausing before responding would demonstrate active listening. Ensuring all patient concerns are acknowledged before moving to the next topic would improve completeness."
+        })
+    
+    return feedback
+
+
 def plot_simu_x_socratic_network(simudf, socratic_wide_df, out_path, miss_threshold=70):
     """Create a bipartite-like network showing correlations between PROaCTIVE elements and Socratic metrics.
 

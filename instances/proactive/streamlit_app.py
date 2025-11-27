@@ -9,6 +9,7 @@ renders the student & faculty visualizations interactively.
 """
 
 import io
+import json
 from pathlib import Path
 import streamlit as st
 import pandas as pd
@@ -25,6 +26,7 @@ from simu_prototype import (
     GROUPS, 
     ELEMENTS, 
     generate_socratic_metrics,
+    generate_ai_feedback_context,
     ENCOUNTER_ELEMENTS,
     SPEECH_METRICS
 )
@@ -49,6 +51,19 @@ def get_element_color(element_name):
     """Get the color for an element based on its domain."""
     domain = get_element_domain(element_name)
     return DOMAIN_COLORS.get(domain, "#95A5A6")  # Default gray if not found
+
+def load_ai_feedback_json():
+    """Load AI feedback context from JSON file."""
+    json_path = Path(__file__).resolve().parent / "ai_feedback_context_sample.json"
+    try:
+        with open(json_path, 'r') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        st.warning(f"AI feedback JSON file not found at {json_path}")
+        return None
+    except json.JSONDecodeError:
+        st.error("Error reading AI feedback JSON file")
+        return None
 
 # Settings
 DEFAULT_OUT_DIR = Path(__file__).resolve().parent
@@ -117,9 +132,10 @@ with st.sidebar:
         
         # Iteration dropdown
         st.markdown('<div class="filter-label">Iteration/Attempt</div>', unsafe_allow_html=True)
-        iteration = st.selectbox("Iteration", list(range(1, 6)), 
+        iteration_options = ["All Iterations"] + list(range(1, 6))
+        iteration = st.selectbox("Iteration", iteration_options, 
                                 key="iteration", label_visibility="collapsed",
-                                help="Select which attempt to view")
+                                help="Select which attempt to view, or 'All Iterations' to view aggregate data")
         
         st.markdown("---")
         
@@ -314,7 +330,10 @@ with tab2:
     
     # Show selected filters
     if view_mode == "Student Dashboard":
-        st.caption(f"**{sim_u_name}** | Iteration: {iteration}")
+        if iteration == "All Iterations":
+            st.caption(f"**{sim_u_name}** | All Iterations")
+        else:
+            st.caption(f"**{sim_u_name}** | Iteration: {iteration}")
     
     # Use sidebar-selected student
     student_df = df[df['student_id'] == selected_student]
@@ -330,7 +349,7 @@ with tab2:
         # Otherwise show all modes
     
     # Filter by iteration if selected
-    if view_mode == "Student Dashboard" and iteration:
+    if view_mode == "Student Dashboard" and iteration != "All Iterations":
         filtered_df = student_df[student_df['attempt'] == iteration]
         # If no data for that iteration, show all
         if filtered_df.empty:
@@ -374,481 +393,484 @@ with tab2:
                 else:
                     st.caption("*Complete analysis with all elements, examples, and detailed recommendations*")
         
-        # Summary metrics section
+        # Chart Selection with Radio Buttons
         st.markdown("---")
-        st.markdown("#### Summary")
-        col1, col2, col3 = st.columns(3)
+        st.markdown("#### Performance Visualization")
         
-        total_attempts = len(student_df)
-        overall_avg = student_df[ELEMENTS].mean().mean()
+        # Load AI feedback context from JSON
+        ai_json_data = load_ai_feedback_json()
         
-        # Use filtered data for last score if iteration is selected
-        if view_mode == "Student Dashboard" and iteration and not filtered_df.empty:
-            last_score = filtered_df[ELEMENTS].mean().mean()
-        else:
-            last_score = student_df.sort_values('attempt', ascending=False).iloc[0][ELEMENTS].mean()
-        
-        with col1:
-            st.metric("Attempts", total_attempts)
-        with col2:
-            st.metric("Overall average", f"{overall_avg:.0f}")
-        with col3:
-            st.metric("Last Score", f"{last_score:.0f}")
-        
-        # Scores section - line chart showing all attempts across domains
-        st.markdown("---")
-        st.markdown("#### Scores Across Domains")
-        st.caption("Performance across all 5 PROaCTIVE domains for each attempt")
-        
-        # Use all student data for visualization
-        student_copy = student_df.copy()
-        
-        # Calculate domain scores for each attempt
-        for gname, elements in GROUPS.items():
-            student_copy[gname] = student_copy[elements].mean(axis=1)
-        
-        # Create readable domain names in order
-        domain_names = [g.replace('PRO_0', '').replace('_', ' ') for g in GROUPS.keys()]
-        domain_keys = list(GROUPS.keys())
-        
-        # Define 10 distinct colors for up to 10 attempts
-        attempt_colors = [
-            '#E74C3C',  # Red
-            '#3498DB',  # Blue
-            '#2ECC71',  # Green
-            '#F39C12',  # Orange
-            '#9B59B6',  # Purple
-            '#1ABC9C',  # Turquoise
-            '#E67E22',  # Dark Orange
-            '#34495E',  # Dark Gray
-            '#E91E63',  # Pink
-            '#00BCD4',  # Cyan
-        ]
-        
-        fig = go.Figure()
-        
-        # Sort attempts to ensure proper ordering
-        unique_attempts = sorted(student_copy['attempt'].unique())
-        
-        # Create a line for each attempt
-        for idx, attempt_num in enumerate(unique_attempts):
-            attempt_data = student_copy[student_copy['attempt'] == attempt_num].iloc[0]
-            
-            # Get scores for each domain for this attempt
-            scores = [attempt_data[domain_key] for domain_key in domain_keys]
-            
-            # Use modulo to cycle colors if more than 10 attempts
-            color = attempt_colors[idx % len(attempt_colors)]
-            
-            fig.add_trace(go.Scatter(
-                x=domain_names,
-                y=scores,
-                mode='lines+markers',
-                name=f'Attempt {attempt_num}',
-                line=dict(color=color, width=2.5),
-                marker=dict(size=8, symbol='circle', line=dict(width=1, color='white')),
-                hovertemplate='<b>Attempt %{fullData.name}</b><br>%{x}<br>Score: %{y:.2f}<extra></extra>'
-            ))
-        
-        fig.update_layout(
-            xaxis=dict(
-                title='PROaCTIVE Domain',
-                showgrid=True,
-                gridcolor='rgba(200, 200, 200, 0.3)',
-                title_font=dict(color='#000000', size=12),
-                tickfont=dict(color='#000000', size=10),
-                tickangle=-15
-            ),
-            yaxis=dict(
-                title='Score (0-4 rubric scale)',
-                range=[0, 4.2],
-                showgrid=True,
-                gridcolor='rgba(200, 200, 200, 0.3)',
-                title_font=dict(color='#000000', size=12),
-                tickfont=dict(color='#000000')
-            ),
-            height=400,
-            margin=dict(l=50, r=150, t=20, b=100),
-            plot_bgcolor='white',
-            paper_bgcolor='white',
-            font=dict(color='#000000'),
-            showlegend=True,
-            legend=dict(
-                orientation='v',
-                yanchor='top',
-                y=1,
-                xanchor='left',
-                x=1.02,
-                font=dict(size=10),
-                bgcolor='rgba(255, 255, 255, 0.9)',
-                bordercolor='#CCCCCC',
-                borderwidth=1
-            ),
-            hovermode='closest'
+        # Radio buttons for chart selection
+        chart_type = st.radio(
+            "Select chart to display:",
+            options=["Domain Scores", "Socratic Dialogue Components", "Speech Quality Metrics"],
+            horizontal=True,
+            key=f"chart_selection_{selected_student}"
         )
-        st.plotly_chart(fig, use_container_width=True)
         
-        # Socratic Components Section (5 components: WONDER, REFLECT, REFINE, RESTATE, REPEAT)
-        st.markdown("---")
-        st.markdown("#### Socratic Dialogue Components")
-        st.caption("Quick assessment of Socratic method application (0-5.0 scale)")
+        # Use iteration-specific data if selected
+        display_df = filtered_df if (view_mode == "Student Dashboard" and iteration != "All Iterations" and not filtered_df.empty) else student_df
         
-        # Get socratic component scores from soc_wide for this student and attempt
+        # Get socratic component data
         student_soc = soc_wide[(soc_wide['student_id'] == selected_student)]
-        if view_mode == "Student Dashboard" and iteration:
+        if view_mode == "Student Dashboard" and iteration != "All Iterations":
             student_soc = student_soc[student_soc['attempt'] == iteration]
         
-        if not student_soc.empty:
-            # Define the 5 Socratic components based on what we generate in simu_prototype.py
-            socratic_components = {
-                'WONDER': 'socratic_Question_Depth',
-                'REFLECT': 'socratic_Response_Completeness',
-                'REFINE': 'socratic_Assumption_Recognition',
-                'RESTATE': 'socratic_Plan_Flexibility',
-                'REPEAT': 'socratic_In-Encounter_Adjustment'
-            }
-            
-            # Get the latest row if multiple attempts
-            latest_soc = student_soc.sort_values('attempt', ascending=False).iloc[0]
-            
-            # Create 5 columns for visual gauge
-            soc_cols = st.columns(5)
-            for idx, (component, col_name) in enumerate(socratic_components.items()):
-                with soc_cols[idx]:
-                    if col_name in latest_soc:
-                        score = latest_soc[col_name]
-                        # Create visual dots (5 total, filled based on score)
-                        filled = int(round(score))
-                        dots = "●" * filled + "○" * (5 - filled)
-                        
-                        # Color based on performance
-                        if score >= 4.0:
-                            color = "#2ECC71"  # Green
-                        elif score >= 3.0:
-                            color = "#3498DB"  # Blue
-                        elif score >= 2.0:
-                            color = "#F39C12"  # Orange
-                        else:
-                            color = "#E74C3C"  # Red
-                        
-                        st.markdown(f"""
-                        <div style="
-                            padding: 10px;
-                            border-radius: 8px;
-                            background-color: {color};
-                            color: white;
-                            text-align: center;
-                            margin-bottom: 5px;
-                        ">
-                            <div style="font-size: 16px; font-weight: bold;">{component}</div>
-                            <div style="font-size: 20px; margin: 5px 0;">{dots}</div>
-                            <div style="font-size: 14px;">{score:.1f}/5.0</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    else:
-                        st.caption(f"{component}\nN/A")
-        else:
-            st.info("Socratic component data not available for this student/iteration")
+        # Calculate latest_attempt data for all sections
+        student_copy = display_df.copy()
+        for gname, elements in GROUPS.items():
+            student_copy[gname] = student_copy[elements].mean(axis=1)
+        latest_attempt = student_copy.sort_values('attempt', ascending=False).iloc[0]
         
-        # Speech Quality Metrics Section
-        st.markdown("---")
-        st.markdown("#### Speech Quality Metrics (0-10 scale)")
-        
-        # Get speech metrics from soc_wide - show for both views
-        if not student_soc.empty:
-            speech_metrics = {
-                'Volume': 'speech_volume',
-                'Pace': 'speech_pace',
-                'Pitch': 'speech_pitch',
-                'Pauses': 'speech_pauses'
-            }
+        # Display selected chart with descriptive statistics
+        if chart_type == "Domain Scores":
+            # Domain Scores Chart
+            st.markdown("##### Domain Scores (0-4 rubric scale)")
             
-            speech_cols = st.columns(4)
-            all_na = True
-            for idx, (metric_name, col_name) in enumerate(speech_metrics.items()):
-                with speech_cols[idx]:
-                    if col_name in latest_soc and pd.notna(latest_soc[col_name]):
-                        score = latest_soc[col_name]
-                        st.metric(metric_name, f"{score:.1f}/10")
-                        all_na = False
-                    else:
-                        st.metric(metric_name, "N/A")
-            
-            if all_na:
-                st.caption("⚠️ **Note:** Speech metrics use default values (no audio provided)")
+            # Use JSON data if available, otherwise calculate from dataframe
+            if ai_json_data and 'chart_data' in ai_json_data:
+                group_scores = ai_json_data['chart_data']['domain_scores']
             else:
+                # Fallback: calculate from dataframe
+                group_scores = {g.replace('PRO_0', '').replace('_', ' '): latest_attempt[g] for g in GROUPS.keys()}
+            
+            # Define colors for all 5 domains
+            criterion_colors = ['#3498DB', '#2ECC71', '#E67E22', '#9B59B6', '#E74C3C']
+            
+            # Create horizontal bar chart
+            fig = go.Figure()
+            for i, (group_name, score) in enumerate(group_scores.items()):
+                fig.add_trace(go.Bar(
+                    y=[group_name],
+                    x=[score],
+                    orientation='h',
+                    marker_color=criterion_colors[i],
+                    text=f"{score:.1f}",
+                    textposition='inside',
+                    textfont=dict(color='white', size=14, family='Arial Black'),
+                    hovertemplate=f'<b>{group_name}</b><br>Score: {score:.1f}<extra></extra>',
+                    showlegend=False
+                ))
+            
+            fig.update_layout(
+                xaxis_range=[0, 4],
+                xaxis_title='Score',
+                yaxis_title='',
+                height=300,
+                margin=dict(l=20, r=20, t=20, b=20),
+                xaxis=dict(showgrid=True, gridcolor='lightgray', title_font=dict(color='black'), tickfont=dict(color='black')),
+                yaxis=dict(tickfont=dict(color='black', size=12)),
+                plot_bgcolor='white',
+                paper_bgcolor='white',
+                font=dict(color='black')
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Descriptive Statistics for Domain Scores
+            st.markdown("##### Descriptive Statistics")
+            
+            # Use JSON data if available, otherwise calculate from dataframe
+            if ai_json_data and 'descriptive_statistics' in ai_json_data:
+                desc_stats = ai_json_data['descriptive_statistics']['domain_scores']
+                stats_data = {
+                    "Statistic": ["Mean", "Median", "Min", "Max", "Range", "Std Dev", "Variance"],
+                    "Value": [
+                        f"{desc_stats['mean']:.2f}",
+                        f"{desc_stats['median']:.2f}",
+                        f"{desc_stats['min']:.2f}",
+                        f"{desc_stats['max']:.2f}",
+                        f"{desc_stats['range']:.2f}",
+                        f"{desc_stats['std']:.2f}",
+                        f"{desc_stats['variance']:.2f}"
+                    ]
+                }
+            else:
+                # Fallback: calculate statistics from dataframe
+                all_scores = [latest_attempt[g] for g in GROUPS.keys()]
+                stats_data = {
+                    "Statistic": ["Mean", "Median", "Mode", "Min", "Max", "Range", "Std Dev", "Variance"],
+                    "Value": [
+                        f"{np.mean(all_scores):.2f}",
+                        f"{np.median(all_scores):.2f}",
+                        f"{pd.Series(all_scores).mode().iloc[0]:.2f}" if not pd.Series(all_scores).mode().empty else "N/A",
+                        f"{np.min(all_scores):.2f}",
+                        f"{np.max(all_scores):.2f}",
+                        f"{np.max(all_scores) - np.min(all_scores):.2f}",
+                    f"{np.std(all_scores, ddof=1):.2f}" if len(all_scores) > 1 else "N/A",
+                    f"{np.var(all_scores, ddof=1):.2f}" if len(all_scores) > 1 else "N/A"
+                ]
+            }
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.dataframe(pd.DataFrame(stats_data), hide_index=True, use_container_width=True)
+            
+            with col2:
+                # Frequency distribution
+                st.markdown("**Frequency Distribution**")
+                # Get all_scores from either JSON or group_scores
+                if not (ai_json_data and 'chart_data' in ai_json_data):
+                    all_scores = [latest_attempt[g] for g in GROUPS.keys()]
+                else:
+                    all_scores = list(group_scores.values())
+                freq_data = pd.Series(all_scores).value_counts().sort_index()
+                for score, count in freq_data.items():
+                    st.write(f"Score {score:.1f}: {count} domain(s)")
+                
+                if view_mode == "Student Dashboard" and iteration != "All Iterations":
+                    st.info(f"📊 Iteration: {iteration}")
+                elif view_mode == "Student Dashboard" and iteration == "All Iterations":
+                    st.info(f"📊 Showing: All Iterations")
+        
+        elif chart_type == "Socratic Dialogue Components":
+            # Socratic Components Chart
+            st.markdown("##### Socratic Dialogue Components (0-5.0 scale)")
+            
+            # Use JSON data if available, otherwise calculate from dataframe
+            if ai_json_data and 'chart_data' in ai_json_data:
+                soc_scores = ai_json_data['chart_data']['socratic_scores']
+            else:
+                # Fallback: calculate from dataframe
+                if not student_soc.empty:
+                    socratic_components = {
+                        'WONDER': 'socratic_Question_Depth',
+                        'REFLECT': 'socratic_Response_Completeness',
+                        'REFINE': 'socratic_Assumption_Recognition',
+                        'RESTATE': 'socratic_Plan_Flexibility',
+                        'REPEAT': 'socratic_In-Encounter_Adjustment'
+                    }
+                    
+                    latest_soc = student_soc.sort_values('attempt', ascending=False).iloc[0]
+                    
+                    # Get scores for available components
+                    soc_scores = {}
+                    for component, col_name in socratic_components.items():
+                        if col_name in latest_soc:
+                            soc_scores[component] = latest_soc[col_name]
+                else:
+                    soc_scores = {}
+            
+            if soc_scores:
+                fig_soc = go.Figure()
+                colors_soc = ['#3498DB', '#2ECC71', '#E67E22', '#9B59B6', '#E74C3C']
+                
+                for i, (component, score) in enumerate(soc_scores.items()):
+                    fig_soc.add_trace(go.Bar(
+                        x=[component],
+                        y=[score],
+                        marker_color=colors_soc[i],
+                        text=f"{score:.1f}",
+                        textposition='outside',
+                        textfont=dict(size=14, family='Arial Black'),
+                        hovertemplate=f'<b>{component}</b><br>Score: {score:.1f}<extra></extra>',
+                        showlegend=False
+                    ))
+                
+                fig_soc.update_layout(
+                    yaxis_range=[0, 5.5],
+                    yaxis_title='Score',
+                    xaxis_title='',
+                    height=300,
+                    margin=dict(l=20, r=20, t=20, b=20),
+                    yaxis=dict(showgrid=True, gridcolor='lightgray', title_font=dict(color='black'), tickfont=dict(color='black')),
+                    xaxis=dict(tickfont=dict(size=11, color='black')),
+                    plot_bgcolor='white',
+                    paper_bgcolor='white',
+                    font=dict(color='black')
+                )
+                st.plotly_chart(fig_soc, use_container_width=True)
+                
+                # Descriptive Statistics for Socratic Components
+                st.markdown("##### Descriptive Statistics")
+                
+                # Use JSON data if available, otherwise calculate from scores
+                if ai_json_data and 'descriptive_statistics' in ai_json_data:
+                    desc_stats_soc = ai_json_data['descriptive_statistics']['socratic_scores']
+                    stats_data_soc = {
+                        "Statistic": ["Mean", "Median", "Min", "Max", "Range", "Std Dev", "Variance"],
+                        "Value": [
+                            f"{desc_stats_soc['mean']:.2f}",
+                            f"{desc_stats_soc['median']:.2f}",
+                            f"{desc_stats_soc['min']:.2f}",
+                            f"{desc_stats_soc['max']:.2f}",
+                            f"{desc_stats_soc['range']:.2f}",
+                            f"{desc_stats_soc['std']:.2f}",
+                            f"{desc_stats_soc['variance']:.2f}"
+                        ]
+                    }
+                else:
+                    # Fallback: calculate statistics from scores
+                    all_soc_scores = list(soc_scores.values())
+                    stats_data_soc = {
+                        "Statistic": ["Mean", "Median", "Mode", "Min", "Max", "Range", "Std Dev", "Variance"],
+                        "Value": [
+                            f"{np.mean(all_soc_scores):.2f}",
+                            f"{np.median(all_soc_scores):.2f}",
+                            f"{pd.Series(all_soc_scores).mode().iloc[0]:.2f}" if not pd.Series(all_soc_scores).mode().empty else "N/A",
+                            f"{np.min(all_soc_scores):.2f}",
+                            f"{np.max(all_soc_scores):.2f}",
+                            f"{np.max(all_soc_scores) - np.min(all_soc_scores):.2f}",
+                            f"{np.std(all_soc_scores, ddof=1):.2f}" if len(all_soc_scores) > 1 else "N/A",
+                            f"{np.var(all_soc_scores, ddof=1):.2f}" if len(all_soc_scores) > 1 else "N/A"
+                        ]
+                    }
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.dataframe(pd.DataFrame(stats_data_soc), hide_index=True, use_container_width=True)
+                
+                with col2:
+                    # Frequency distribution
+                    st.markdown("**Frequency Distribution**")
+                    all_soc_scores = list(soc_scores.values())
+                    freq_data_soc = pd.Series(all_soc_scores).value_counts().sort_index()
+                    for score, count in freq_data_soc.items():
+                        st.write(f"Score {score:.1f}: {count} component(s)")
+                    
+                    if view_mode == "Student Dashboard" and iteration != "All Iterations":
+                        st.info(f"📊 Iteration: {iteration}")
+                    elif view_mode == "Student Dashboard" and iteration == "All Iterations":
+                        st.info(f"📊 Showing: All Iterations")
+            else:
+                st.info("Socratic component data not available for this student/iteration")
+        
+        else:  # Speech Quality Metrics
+            st.markdown("##### Speech Quality Metrics (0-10 scale)")
+            
+            # Use JSON data if available, otherwise calculate from dataframe
+            if ai_json_data and 'chart_data' in ai_json_data:
+                speech_scores = ai_json_data['chart_data']['speech_scores']
+            else:
+                # Fallback: calculate from dataframe
+                if not student_soc.empty:
+                    speech_metrics = {
+                        'Volume': 'speech_volume',
+                        'Pace': 'speech_pace',
+                        'Pitch': 'speech_pitch',
+                        'Pauses': 'speech_pauses'
+                    }
+                    
+                    latest_soc = student_soc.sort_values('attempt', ascending=False).iloc[0]
+                    
+                    # Get scores for available metrics
+                    speech_scores = {}
+                    for metric_name, col_name in speech_metrics.items():
+                        if col_name in latest_soc and pd.notna(latest_soc[col_name]):
+                            speech_scores[metric_name] = latest_soc[col_name]
+                else:
+                    speech_scores = {}
+            
+            if speech_scores:
+                fig_speech = go.Figure()
+                colors_speech = ['#3498DB', '#2ECC71', '#E67E22', '#9B59B6']
+                
+                for i, (metric, score) in enumerate(speech_scores.items()):
+                    fig_speech.add_trace(go.Bar(
+                        x=[metric],
+                        y=[score],
+                        marker_color=colors_speech[i],
+                        text=f"{score:.1f}",
+                        textposition='outside',
+                        textfont=dict(size=14, family='Arial Black'),
+                        hovertemplate=f'<b>{metric}</b><br>Score: {score:.1f}<extra></extra>',
+                        showlegend=False
+                    ))
+                
+                fig_speech.update_layout(
+                    yaxis_range=[0, 11],
+                    yaxis_title='Score',
+                    xaxis_title='',
+                    height=300,
+                    margin=dict(l=20, r=20, t=20, b=20),
+                    yaxis=dict(showgrid=True, gridcolor='lightgray', title_font=dict(color='black'), tickfont=dict(color='black')),
+                    xaxis=dict(tickfont=dict(color='black')),
+                    plot_bgcolor='white',
+                    paper_bgcolor='white',
+                    font=dict(color='black')
+                )
+                st.plotly_chart(fig_speech, use_container_width=True)
+                
+                # Descriptive Statistics for Speech Metrics
+                st.markdown("##### Descriptive Statistics")
+                
+                # Use JSON data if available, otherwise calculate from scores
+                if ai_json_data and 'descriptive_statistics' in ai_json_data:
+                    desc_stats_speech = ai_json_data['descriptive_statistics']['speech_scores']
+                    stats_data_speech = {
+                        "Statistic": ["Mean", "Median", "Min", "Max", "Range", "Std Dev", "Variance"],
+                        "Value": [
+                            f"{desc_stats_speech['mean']:.2f}",
+                            f"{desc_stats_speech['median']:.2f}",
+                            f"{desc_stats_speech['min']:.2f}",
+                            f"{desc_stats_speech['max']:.2f}",
+                            f"{desc_stats_speech['range']:.2f}",
+                            f"{desc_stats_speech['std']:.2f}",
+                            f"{desc_stats_speech['variance']:.2f}"
+                        ]
+                    }
+                else:
+                    # Fallback: calculate statistics from scores
+                    all_speech_scores = list(speech_scores.values())
+                    stats_data_speech = {
+                        "Statistic": ["Mean", "Median", "Mode", "Min", "Max", "Range", "Std Dev", "Variance"],
+                        "Value": [
+                            f"{np.mean(all_speech_scores):.2f}",
+                            f"{np.median(all_speech_scores):.2f}",
+                            f"{pd.Series(all_speech_scores).mode().iloc[0]:.2f}" if not pd.Series(all_speech_scores).mode().empty else "N/A",
+                            f"{np.min(all_speech_scores):.2f}",
+                            f"{np.max(all_speech_scores):.2f}",
+                            f"{np.max(all_speech_scores) - np.min(all_speech_scores):.2f}",
+                            f"{np.std(all_speech_scores, ddof=1):.2f}" if len(all_speech_scores) > 1 else "N/A",
+                            f"{np.var(all_speech_scores, ddof=1):.2f}" if len(all_speech_scores) > 1 else "N/A"
+                        ]
+                    }
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.dataframe(pd.DataFrame(stats_data_speech), hide_index=True, use_container_width=True)
+                
+                with col2:
+                    # Frequency distribution
+                    st.markdown("**Frequency Distribution**")
+                    all_speech_scores = list(speech_scores.values())
+                    freq_data_speech = pd.Series(all_speech_scores).value_counts().sort_index()
+                    for score, count in freq_data_speech.items():
+                        st.write(f"Score {score:.1f}: {count} metric(s)")
+                    
+                    if view_mode == "Student Dashboard" and iteration != "All Iterations":
+                        st.info(f"📊 Iteration: {iteration}")
+                    elif view_mode == "Student Dashboard" and iteration == "All Iterations":
+                        st.info(f"📊 Showing: All Iterations")
+                
                 st.caption("ℹ️ Speech quality assessed from encounter recording")
-        else:
-            st.info("Speech quality data not available for this student/iteration")
-        
-        # Qualitative Feedback sectiontion
-        st.markdown("---")
-        st.markdown("### Detailed Performance Analysis")
-        
-        # Show which iteration is being analyzed
-        if view_mode == "Student Dashboard" and iteration:
-            st.caption(f"*Feedback for Iteration {iteration}*")
-        
-        # Generate detailed feedback for each domain
-        for idx, (gname, elements) in enumerate(GROUPS.items(), 1):
-            avg_score = latest_attempt[gname]
-            domain_label = gname.replace('PRO_0', '').replace('_', ' ')
-            
-            # Determine proficiency level
-            if avg_score >= 4.1:
-                proficiency = "Advanced"
-                prof_color = "#2ECC71"
-            elif avg_score >= 3.1:
-                proficiency = "Proficient"
-                prof_color = "#3498DB"
-            elif avg_score >= 2.1:
-                proficiency = "Emerging"
-                prof_color = "#F39C12"
             else:
-                proficiency = "Developing"
-                prof_color = "#E74C3C"
-            
-            with st.expander(f"**{idx}. {domain_label} - Score: {avg_score:.1f}/5.0 ({proficiency})**", expanded=(idx==1)):
-                # Domain-specific detailed feedback
-                if "Question" in domain_label:
-                    st.markdown("**Question Depth:** Progresses from simple to complex")
-                    st.markdown(f"**Proficiency:** {proficiency} ({avg_score:.1f}/5.0)")
-                    st.markdown("**Question Types:** Uses clarification, understanding check, values exploration")
-                    
-                    st.markdown("##### Key Points Covered:")
-                    st.markdown("- Open-ended solicitation of chief complaint in patient's own words")
-                    st.markdown("- Chronological and detailed symptom exploration using clarifying questions")
-                    st.markdown("- Values exploration questions to understand patient perspective")
-                    
-                    st.markdown("##### Key Points Missed:")
-                    st.markdown("- Could include more systematic inquiry about symptom timeline")
-                    st.markdown("- Consider adding questions about impact on daily activities")
-                    
-                    st.markdown("##### Specific Recommendations:")
-                    st.markdown("• Practice formulating open-ended questions at multiple levels")
-                    st.markdown("• Focus on question timing and clarity")
-                    st.markdown("• Review rubric for question depth criteria")
-                    
-                    st.markdown("##### Reflection Questions:")
-                    st.info("*How might varying your question types enhance patient engagement and information gathering?*")
-                    
-                elif "Response" in domain_label:
-                    st.markdown("**Response Completeness:** Demonstrates active listening")
-                    st.markdown(f"**Proficiency:** {proficiency} ({avg_score:.1f}/5.0)")
-                    
-                    st.markdown("##### Key Points Covered:")
-                    st.markdown("- Complete and thoughtful responses to patient statements")
-                    st.markdown("- Effective use of reflective pausing")
-                    st.markdown("- Verification of understanding before proceeding")
-                    
-                    st.markdown("##### Specific Recommendations:")
-                    st.markdown("• Work on active listening techniques")
-                    st.markdown("• Practice reflective pausing before responding")
-                    st.markdown("• Develop verification strategies")
-                    
-                    st.markdown("##### Reflection Questions:")
-                    st.info("*What strategies could you use to better verify understanding before moving forward?*")
-                    
-                elif "Critical" in domain_label:
-                    st.markdown("**Clinical Reasoning:** Transparent thought processes")
-                    st.markdown(f"**Proficiency:** {proficiency} ({avg_score:.1f}/5.0)")
-                    
-                    st.markdown("##### Key Points Covered:")
-                    st.markdown("- Clear articulation of diagnostic reasoning")
-                    st.markdown("- Recognition of clinical patterns")
-                    st.markdown("- Consideration of differential diagnoses")
-                    
-                    st.markdown("##### Specific Recommendations:")
-                    st.markdown("• Strengthen clinical reasoning transparency by verbalizing thought process")
-                    st.markdown("• Practice differential thinking with case scenarios")
-                    st.markdown("• Increase transparency of clinical reasoning in patient-friendly language")
-                    
-                    st.markdown("##### Reflection Questions:")
-                    st.info("*How can you more effectively communicate your reasoning to help patients understand your clinical decision-making?*")
-                    
-                elif "Humility" in domain_label:
-                    st.markdown("**Partnership Language:** Collaborative approach")
-                    st.markdown(f"**Proficiency:** {proficiency} ({avg_score:.1f}/5.0)")
-                    
-                    st.markdown("##### Key Points Covered:")
-                    st.markdown("- Use of partnership language")
-                    st.markdown("- Appropriate acknowledgment of expertise limits")
-                    st.markdown("- Flexibility in care planning")
-                    
-                    st.markdown("##### Specific Recommendations:")
-                    st.markdown("• Focus on shared decision-making language")
-                    st.markdown("• Practice acknowledging uncertainty appropriately")
-                    st.markdown("• Invite patient partnership in care planning")
-                    
-                    st.markdown("##### Reflection Questions:")
-                    st.info("*In what ways can you better incorporate patient preferences and values into your care recommendations?*")
-                    
-                else:  # Reflective Practice
-                    st.markdown("**Self-Awareness:** In-encounter adjustments")
-                    st.markdown(f"**Proficiency:** {proficiency} ({avg_score:.1f}/5.0)")
-                    
-                    st.markdown("##### Key Points Covered:")
-                    st.markdown("- Demonstrated self-awareness during encounter")
-                    st.markdown("- Effective in-encounter adjustments")
-                    st.markdown("- Recognition of communication patterns")
-                    
-                    st.markdown("##### Specific Recommendations:")
-                    st.markdown("• Develop habit of in-encounter self-monitoring")
-                    st.markdown("• Note one adjustment per encounter and reflect on why")
-                    st.markdown("• Consider recording encounters for self-review")
-                    
-                    st.markdown("##### Reflection Questions:")
-                    st.info("*What patterns do you notice in your communication style, and how might awareness of these patterns improve your practice?*")
+                st.info("Speech quality data not available for this student/iteration")
         
-        # Proficiency Interpretation Section
+        # AI-Generated Descriptive Feedback Section
         st.markdown("---")
-        st.markdown("### Proficiency Interpretation")
+        st.markdown("### 🤖 AI-Generated Descriptive Feedback")
         
-        avg_overall = sum(latest_attempt[g] for g in GROUPS.keys()) / len(GROUPS)
-        if avg_overall >= 4.1:
-            overall_level = "Advanced"
-            interpretation = "Exhibits sophisticated, adaptive patient dialogue skills; serves as model for others"
-        elif avg_overall >= 3.1:
-            overall_level = "Proficient"
-            interpretation = "Consistently demonstrates effective Socratic dialogue techniques with patients"
-        elif avg_overall >= 2.1:
-            overall_level = "Emerging"
-            interpretation = "Shows growing skills in patient-centered dialogue across multiple encounters"
+        # Use JSON data if available, otherwise generate dynamically
+        if ai_json_data:
+            ai_context = ai_json_data
         else:
-            overall_level = "Developing"
-            interpretation = "Beginning to incorporate dialogue techniques; primarily information-gathering approach"
-        
-        st.markdown(f"**Overall Proficiency Level:** {overall_level} ({avg_overall:.1f}/5.0)")
-        st.info(interpretation)
-        
-        # Proficiency Scale Table
-        st.markdown("##### Overall Score Range & Capacity Levels")
-        proficiency_table = {
-            "Score Range": ["1.0 - 2.0", "2.1 - 3.0", "3.1 - 4.0", "4.1 - 5.0"],
-            "Capacity Level": ["Developing", "Emerging", "Proficient", "Advanced"],
-            "Clinical Description": [
-                "Beginning to incorporate dialogue techniques; primarily information-gathering approach",
-                "Shows growing skills in patient-centered dialogue across multiple encounters",
-                "Consistently demonstrates effective Socratic dialogue techniques with patients",
-                "Exhibits sophisticated, adaptive patient dialogue skills; serves as model for others"
-            ]
-        }
-        
-        import pandas as pd
-        prof_df = pd.DataFrame(proficiency_table)
-        st.table(prof_df)
-        
-        # Feedback Rating Section (Student View Only)
-        if view_mode == "Student Dashboard":
-            st.markdown("---")
-            st.markdown("#### 📊 Rate This Feedback")
-            st.caption("Your ratings help us improve the feedback system. Please rate each aspect on a scale of 1-5.")
-            
-            # Create unique keys for this iteration's feedback ratings
-            rating_key_base = f"rating_{selected_student}_{iteration}"
-            
-            # Rating 1: Clarity
-            st.markdown("**Clarity:** How clear was the feedback?")
-            clarity_rating = st.radio(
-                "Clarity rating",
-                options=[1, 2, 3, 4, 5],
-                format_func=lambda x: str(x),
-                horizontal=True,
-                key=f"{rating_key_base}_clarity",
-                label_visibility="collapsed"
-            )
-            col_c1, col_c2 = st.columns([1, 1])
-            with col_c1:
-                st.caption("*Very Unclear*")
-            with col_c2:
-                st.caption("*Very Clear*", help=None)
+            # Fallback: generate AI feedback dynamically
+            try:
+                # Prepare domain scores
+                domain_scores = {}
+                for domain in GROUPS.keys():
+                    domain_scores[domain] = display_df[list(GROUPS[domain])].mean().mean()
                 
-            st.markdown("---")
-            
-            # Rating 2: Actionability
-            st.markdown("**Actionability:** How actionable were the recommendations?")
-            action_rating = st.radio(
-                "Actionability rating",
-                options=[1, 2, 3, 4, 5],
-                format_func=lambda x: str(x),
-                horizontal=True,
-                key=f"{rating_key_base}_action",
-                label_visibility="collapsed"
-            )
-            col_a1, col_a2 = st.columns([1, 1])
-            with col_a1:
-                st.caption("*Not Actionable*")
-            with col_a2:
-                st.caption("*Very Actionable*")
+                # Prepare socratic scores
+                socratic_scores = {}
+                if not student_soc.empty:
+                    soc_row = student_soc.iloc[-1]  # Get latest or aggregate
+                    socratic_scores = {
+                        "Question Depth": float(soc_row['socratic_Question_Depth']),
+                        "Response Completeness": float(soc_row['socratic_Response_Completeness']),
+                        "Assumption Recognition": float(soc_row['socratic_Assumption_Recognition']),
+                        "Plan Flexibility": float(soc_row['socratic_Plan_Flexibility']),
+                        "In-Encounter Adjustment": float(soc_row['socratic_In-Encounter_Adjustment']),
+                    }
                 
-            st.markdown("---")
-            
-            # Rating 3: Appropriate Detail
-            st.markdown("**Appropriate Detail:** Was the level of detail appropriate?")
-            detail_rating = st.radio(
-                "Detail rating",
-                options=[1, 2, 3, 4, 5],
-                format_func=lambda x: str(x),
-                horizontal=True,
-                key=f"{rating_key_base}_detail",
-                label_visibility="collapsed"
-            )
-            col_d1, col_d2 = st.columns([1, 1])
-            with col_d1:
-                st.caption("*Too Little/Too Much*")
-            with col_d2:
-                st.caption("*Just Right*")
+                # Prepare speech scores
+                speech_scores = {}
+                if not student_soc.empty:
+                    soc_row = student_soc.iloc[-1]
+                    speech_scores = {
+                        "volume": float(soc_row['speech_volume']),
+                        "pace": float(soc_row['speech_pace']),
+                        "pitch": float(soc_row['speech_pitch']),
+                        "pauses": float(soc_row['speech_pauses']),
+                    }
                 
-            st.markdown("---")
-            
-            # Rating 4: Question Quality
-            st.markdown("**Question Quality:** Were the reflection questions helpful?")
-            question_rating = st.radio(
-                "Question quality rating",
-                options=[1, 2, 3, 4, 5],
-                format_func=lambda x: str(x),
-                horizontal=True,
-                key=f"{rating_key_base}_questions",
-                label_visibility="collapsed"
-            )
-            col_q1, col_q2 = st.columns([1, 1])
-            with col_q1:
-                st.caption("*Not Helpful*")
-            with col_q2:
-                st.caption("*Very Helpful*")
+                # Prepare encounter completeness
+                encounter_completeness = {}
+                if not student_soc.empty:
+                    soc_row = student_soc.iloc[-1]
+                    for elem in ENCOUNTER_ELEMENTS:
+                        encounter_completeness[elem] = int(soc_row[f'encounter_{elem}'])
                 
-            st.markdown("---")
-            
-            # Rating 5: Overall Satisfaction
-            st.markdown("**Overall Satisfaction:** Overall, how satisfied are you with this feedback?")
-            overall_rating = st.radio(
-                "Overall satisfaction rating",
-                options=[1, 2, 3, 4, 5],
-                format_func=lambda x: str(x),
-                horizontal=True,
-                key=f"{rating_key_base}_overall",
-                label_visibility="collapsed"
-            )
-            col_o1, col_o2 = st.columns([1, 1])
-            with col_o1:
-                st.caption("*Very Dissatisfied*")
-            with col_o2:
-                st.caption("*Very Satisfied*")
-            
-            # Submit button for ratings
-            st.markdown("---")
-            if st.button("Submit Ratings", type="primary", use_container_width=True):
-                # In a real system, this would save the ratings to a database
-                st.success("✅ Thank you for your feedback! Your ratings have been recorded and will help us improve the system.")
-                st.info(f"**Your Ratings Summary:**\n- Clarity: {clarity_rating}/5\n- Actionability: {action_rating}/5\n- Detail: {detail_rating}/5\n- Question Quality: {question_rating}/5\n- Overall: {overall_rating}/5")
+                # Get attempt number (ensure it's an integer)
+                if iteration != "All Iterations":
+                    attempt_num = int(iteration)
+                else:
+                    attempt_num = int(display_df['attempt'].max())
+                
+                # Generate AI context
+                ai_context = generate_ai_feedback_context(
+                    student_id=selected_student,
+                    attempt=attempt_num,
+                    domain_scores=domain_scores,
+                    socratic_scores=socratic_scores,
+                    speech_scores=speech_scores,
+                    encounter_completeness=encounter_completeness
+                )
+            except Exception as e:
+                st.warning(f"⚠️ Could not generate AI feedback: {str(e)}")
+                st.info("💡 **Note:** AI-generated qualitative feedback based on performance data.")
+                ai_context = None
         
-        # Action buttons
-        st.markdown("---")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.button("Export PDF", use_container_width=True)
-        with col2:
-            st.button("View attempt details", use_container_width=True)
+        if ai_context:
+            # Display overall performance summary at top
+            st.markdown("#### 📊 Overall Performance")
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.metric(
+                    "Domain Performance",
+                    f"{ai_context['descriptive_statistics']['domain_scores']['mean']:.2f}/4.0",
+                    f"±{ai_context['descriptive_statistics']['domain_scores']['std']:.2f}"
+                )
+            
+            with col2:
+                st.metric(
+                    "Socratic Skills",
+                    f"{ai_context['descriptive_statistics']['socratic_scores']['mean']:.2f}/5.0",
+                    f"±{ai_context['descriptive_statistics']['socratic_scores']['std']:.2f}"
+                )
+            
+            with col3:
+                st.metric(
+                    "Speech Quality",
+                    f"{ai_context['descriptive_statistics']['speech_scores']['mean']:.2f}/10.0",
+                    f"±{ai_context['descriptive_statistics']['speech_scores']['std']:.2f}"
+                )
+            
+            st.markdown("---")
+            
+            # Display detailed domain performance
+            if ai_context.get('domain_performance'):
+                st.markdown("#### 📋 Detailed Domain Performance")
+                
+                for domain_key, domain_data in ai_context['domain_performance'].items():
+                    with st.expander(f"**{domain_key}** - Score: {domain_data['score']:.1f}/4.0 ({domain_data['level']})", expanded=False):
+                        st.write(f"*{domain_data['descriptor']}*")
+                        
+                        # Display sub-components if available
+                        if 'components' in domain_data:
+                            for component in domain_data['components']:
+                                st.markdown(f"**{component['name']}:** {component['description']}")
+                                st.write(f"*Proficiency: {component['proficiency']}*")
+                                st.markdown("")
+            
+            st.markdown("---")
+            
+            # Display comprehensive feedback - What student did well
+            if ai_context.get('what_student_did_well'):
+                st.markdown("#### ✅ What the Student Did Well")
+                for item in ai_context['what_student_did_well']:
+                    st.markdown(f"**{item['category']}**")
+                    st.write(item['details'])
+                    st.markdown("")  # Add spacing
+            
+            # Display comprehensive feedback - Areas for improvement
+            if ai_context.get('areas_for_improvement'):
+                st.markdown("#### 📈 Areas for Improvement")
+                for item in ai_context['areas_for_improvement']:
+                    st.markdown(f"**{item['category']}**")
+                    st.write(item['details'])
+                    st.markdown("")  # Add spacing
     else:
         st.warning(f"No data for {selected_student}")
 
