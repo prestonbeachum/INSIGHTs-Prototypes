@@ -1,0 +1,164 @@
+{
+  "student_id": "S01",
+  "attempt": 3,
+  "timestamp": "2025-11-23",
+  "chart_data": {
+    "domain_scores": {
+      "PRO_01_Question_Formulation": 2.8694444444444445,
+      "PRO_02_Response_Quality": 2.1777777777777776,
+      "PRO_03_Critical_Thinking": 2.7583333333333337,
+      "PRO_04_Humility_Partnership": 2.2472222222222222,
+      "PRO_05_Reflective_Practice": 2.5805555555555557
+    },
+    "socratic_scores": {
+      "Question Depth": 3.0,
+      "Response Completeness": 1.5,
+      "Assumption Recognition": 2.3,
+      "Plan Flexibility": 2.4,
+      "In-Encounter Adjustment": 3.1
+    },
+    "speech_scores": {
+      "volume": 7.1,
+      "pace": 8.7,
+      "pitch": 7.7,
+      "pauses": 9.4
+    }
+  },
+  "domain_performance": {
+    "Question Formulation": {
+      "score": 2.9,
+      "level": "Proficient",
+      "descriptor": "shows solid competence with regular effective application"
+    },
+    "Response Quality": {
+      "score": 2.2,
+      "level": "Emerging",
+      "descriptor": "demonstrates growing capability with some inconsistency"
+    },
+    "Critical Thinking": {
+      "score": 2.8,
+      "level": "Proficient",
+      "descriptor": "shows solid competence with regular effective application"
+    },
+    "Humility Partnership": {
+      "score": 2.2,
+      "level": "Emerging",
+      "descriptor": "demonstrates growing capability with some inconsistency"
+    },
+    "Reflective Practice": {
+      "score": 2.6,
+      "level": "Proficient",
+      "descriptor": "shows solid competence with regular effective application"
+    }
+  },
+  "socratic_performance": {
+    "WONDER": {
+      "score": 3.0,
+      "interpretation": "adequate"
+    },
+    "REFLECT": {
+      "score": 1.5,
+      "interpretation": "developing"
+    },
+    "REFINE": {
+      "score": 2.3,
+      "interpretation": "developing"
+    },
+    "RESTATE": {
+      "score": 2.4,
+      "interpretation": "developing"
+    },
+    "REPEAT": {
+      "score": 3.1,
+      "interpretation": "adequate"
+    }
+  },
+  "speech_performance": {
+    "volume": {
+      "score": 7.1,
+      "quality": "good"
+    },
+    "pace": {
+      "score": 8.7,
+      "quality": "excellent"
+    },
+    "pitch": {
+      "score": 7.7,
+      "quality": "good"
+    },
+    "pauses": {
+      "score": 9.4,
+      "quality": "excellent"
+    }
+  },
+  "encounter_completeness": {
+    "chief_complaint": 0,
+    "hpi": 1,
+    "pmh": 1,
+    "social_history": 1,
+    "ros": 1,
+    "family_history": 1,
+    "surgical_history": 0,
+    "allergies": 0
+  },
+  "descriptive_statistics": {
+    "domain_scores": {
+      "mean": 2.53,
+      "median": 2.58,
+      "std": 0.27,
+      "variance": 0.07,
+      "min": 2.18,
+      "max": 2.87,
+      "range": 0.69
+    },
+    "socratic_scores": {
+      "mean": 2.46,
+      "median": 2.4,
+      "std": 0.57,
+      "variance": 0.33,
+      "min": 1.5,
+      "max": 3.1,
+      "range": 1.6
+    },
+    "speech_scores": {
+      "mean": 8.22,
+      "median": 8.2,
+      "std": 0.89,
+      "variance": 0.79,
+      "min": 7.1,
+      "max": 9.4,
+      "range": 2.3
+    }
+  },
+  "top_strengths": [],
+  "growth_areas": [
+    {
+      "domain": "Response Quality",
+      "score": 2.2,
+      "note": "Opportunity to develop response quality skills"
+    },
+    {
+      "domain": "Humility Partnership",
+      "score": 2.2,
+      "note": "Opportunity to develop humility partnership skills"
+    }
+  ],
+  "patterns": [
+    {
+      "type": "alignment",
+      "observation": "Domain performance aligns well with Socratic dialogue skills"
+    }
+  ],
+  "observed_behaviors": [
+    {
+      "category": "Response Quality",
+      "observation": "Responses occasionally interrupted patient's train of thought",
+      "timestamp": "00:05:42"
+    },
+    {
+      "category": "Partnership",
+      "observation": "Primarily directive approach with limited patient input on care decisions",
+      "timestamp": "00:11:05"
+    }
+  ]
+}
