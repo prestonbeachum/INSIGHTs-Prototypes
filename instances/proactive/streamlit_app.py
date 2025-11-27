@@ -395,52 +395,96 @@ with tab2:
         with col3:
             st.metric("Last Score", f"{last_score:.0f}")
         
-        # Scores section - horizontal bar chart
+        # Scores section - line chart showing all attempts across domains
         st.markdown("---")
-        st.markdown("#### Scores")
+        st.markdown("#### Scores Across Domains")
+        st.caption("Performance across all 5 PROaCTIVE domains for each attempt")
         
-        # Use iteration-specific data if selected
-        display_df = filtered_df if (view_mode == "Student Dashboard" and iteration and not filtered_df.empty) else student_df
+        # Use all student data for visualization
+        student_copy = student_df.copy()
         
-        # Get per-attempt scores for each group
-        student_copy = display_df.copy()
+        # Calculate domain scores for each attempt
         for gname, elements in GROUPS.items():
             student_copy[gname] = student_copy[elements].mean(axis=1)
         
-        # Create horizontal bar chart for latest/selected attempt
-        latest_attempt = student_copy.sort_values('attempt', ascending=False).iloc[0]
-        group_scores = {g.replace('PRO_0', '').replace('_', ' '): latest_attempt[g] for g in GROUPS.keys()}
+        # Create readable domain names in order
+        domain_names = [g.replace('PRO_0', '').replace('_', ' ') for g in GROUPS.keys()]
+        domain_keys = list(GROUPS.keys())
         
-        # Define colors for all 5 domains
-        criterion_colors = ['#3498DB', '#2ECC71', '#E67E22', '#9B59B6', '#E74C3C']
+        # Define 10 distinct colors for up to 10 attempts
+        attempt_colors = [
+            '#E74C3C',  # Red
+            '#3498DB',  # Blue
+            '#2ECC71',  # Green
+            '#F39C12',  # Orange
+            '#9B59B6',  # Purple
+            '#1ABC9C',  # Turquoise
+            '#E67E22',  # Dark Orange
+            '#34495E',  # Dark Gray
+            '#E91E63',  # Pink
+            '#00BCD4',  # Cyan
+        ]
         
         fig = go.Figure()
-        for i, (group_name, score) in enumerate(group_scores.items()):
-            # Use modulo to avoid IndexError if there are more groups than colors
-            color_idx = i % len(criterion_colors)
-            fig.add_trace(go.Bar(
-                y=[group_name],
-                x=[score],
-                orientation='h',
-                marker_color=criterion_colors[color_idx],
-                text=f"{score:.0f}",
-                textposition='inside',
-                textfont=dict(color='white', size=14),
-                hovertemplate=f'<b>{group_name}</b><br>Score: {score:.1f}<extra></extra>',
-                showlegend=False
+        
+        # Sort attempts to ensure proper ordering
+        unique_attempts = sorted(student_copy['attempt'].unique())
+        
+        # Create a line for each attempt
+        for idx, attempt_num in enumerate(unique_attempts):
+            attempt_data = student_copy[student_copy['attempt'] == attempt_num].iloc[0]
+            
+            # Get scores for each domain for this attempt
+            scores = [attempt_data[domain_key] for domain_key in domain_keys]
+            
+            # Use modulo to cycle colors if more than 10 attempts
+            color = attempt_colors[idx % len(attempt_colors)]
+            
+            fig.add_trace(go.Scatter(
+                x=domain_names,
+                y=scores,
+                mode='lines+markers',
+                name=f'Attempt {attempt_num}',
+                line=dict(color=color, width=2.5),
+                marker=dict(size=8, symbol='circle', line=dict(width=1, color='white')),
+                hovertemplate='<b>Attempt %{fullData.name}</b><br>%{x}<br>Score: %{y:.2f}<extra></extra>'
             ))
         
         fig.update_layout(
-            xaxis_range=[0, 4],
-            xaxis_title='Score (0-4 rubric scale)',
-            yaxis_title='',
-            height=250,
-            margin=dict(l=20, r=20, t=20, b=20),
-            xaxis=dict(showgrid=True, gridcolor='lightgray', title_font=dict(color='#000000'), tickfont=dict(color='#000000')),
-            yaxis=dict(title_font=dict(color='#000000'), tickfont=dict(color='#000000')),
+            xaxis=dict(
+                title='PROaCTIVE Domain',
+                showgrid=True,
+                gridcolor='rgba(200, 200, 200, 0.3)',
+                title_font=dict(color='#000000', size=12),
+                tickfont=dict(color='#000000', size=10),
+                tickangle=-15
+            ),
+            yaxis=dict(
+                title='Score (0-4 rubric scale)',
+                range=[0, 4.2],
+                showgrid=True,
+                gridcolor='rgba(200, 200, 200, 0.3)',
+                title_font=dict(color='#000000', size=12),
+                tickfont=dict(color='#000000')
+            ),
+            height=400,
+            margin=dict(l=50, r=150, t=20, b=100),
             plot_bgcolor='white',
             paper_bgcolor='white',
-            font=dict(color='#000000')
+            font=dict(color='#000000'),
+            showlegend=True,
+            legend=dict(
+                orientation='v',
+                yanchor='top',
+                y=1,
+                xanchor='left',
+                x=1.02,
+                font=dict(size=10),
+                bgcolor='rgba(255, 255, 255, 0.9)',
+                bordercolor='#CCCCCC',
+                borderwidth=1
+            ),
+            hovermode='closest'
         )
         st.plotly_chart(fig, use_container_width=True)
         
