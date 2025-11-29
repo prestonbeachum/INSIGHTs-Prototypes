@@ -453,50 +453,35 @@ with tab2:
         # Sort attempts to ensure proper ordering
         unique_attempts = sorted(student_copy_domains['attempt'].unique())
         
-        # Create custom colored checkbox interface for attempt selection
-        st.markdown("**Select attempts to display:**")
+        # Create organized filtering system
+        st.markdown("**Filter attempts to display:**")
+        col1, col2 = st.columns([1, 2])
         
-        # Create colored checkboxes in a grid layout
-        num_cols = min(5, len(unique_attempts))  # Max 5 columns
-        cols = st.columns(num_cols)
+        with col1:
+            filter_type = st.radio(
+                "Filter type",
+                options=["All", "Last 5", "Individual"],
+                key=f"filter_type_{selected_student}_domain",
+                label_visibility="collapsed",
+                horizontal=False
+            )
         
-        selected_attempt_nums = []
-        for idx, attempt_num in enumerate(unique_attempts):
-            col_idx = idx % num_cols
-            with cols[col_idx]:
-                color = attempt_colors[idx % len(attempt_colors)]
-                
-                # Create a colored box with checkbox inside
-                st.markdown(f"""
-                    <div style="
-                        background-color: {color};
-                        padding: 2px;
-                        border-radius: 6px;
-                        margin-bottom: 8px;
-                    ">
-                        <div style="
-                            background-color: {color};
-                            color: white;
-                            text-align: center;
-                            font-weight: bold;
-                            padding: 4px;
-                            border-radius: 4px;
-                        ">
-                            Attempt {attempt_num}
-                        </div>
-                    </div>
-                """, unsafe_allow_html=True)
-                
-                # Checkbox below the colored box
-                is_selected = st.checkbox(
-                    "Show",
-                    value=True,  # All selected by default
-                    key=f"attempt_checkbox_{attempt_num}_{selected_student}_domain",
-                    label_visibility="collapsed"
+        with col2:
+            if filter_type == "All":
+                selected_attempt_nums = unique_attempts
+                st.info(f"Showing all {len(unique_attempts)} attempts")
+            elif filter_type == "Last 5":
+                selected_attempt_nums = unique_attempts[-5:] if len(unique_attempts) >= 5 else unique_attempts
+                st.info(f"Showing last {len(selected_attempt_nums)} attempt(s): {', '.join(map(str, selected_attempt_nums))}")
+            else:  # Individual
+                selected_attempt_nums = st.multiselect(
+                    label="Choose which attempts to display",
+                    options=unique_attempts,
+                    default=unique_attempts,
+                    key=f"attempt_multiselect_{selected_student}_domain",
+                    label_visibility="collapsed",
+                    help="Select one or more attempts to display on the graph"
                 )
-                
-                if is_selected:
-                    selected_attempt_nums.append(attempt_num)
         
         fig = go.Figure()
         
@@ -625,50 +610,35 @@ with tab2:
             # Sort attempts to ensure proper ordering
             unique_soc_attempts = sorted(student_soc['attempt'].unique())
             
-            # Create custom colored checkbox interface for attempt selection
-            st.markdown("**Select attempts to display:**")
+            # Create organized filtering system
+            st.markdown("**Filter attempts to display:**")
+            col1, col2 = st.columns([1, 2])
             
-            # Create colored checkboxes in a grid layout
-            num_cols = min(5, len(unique_soc_attempts))  # Max 5 columns
-            cols = st.columns(num_cols)
+            with col1:
+                filter_type_soc = st.radio(
+                    "Filter type",
+                    options=["All", "Last 5", "Individual"],
+                    key=f"filter_type_{selected_student}_socratic",
+                    label_visibility="collapsed",
+                    horizontal=False
+                )
             
-            selected_soc_attempt_nums = []
-            for idx, attempt_num in enumerate(unique_soc_attempts):
-                col_idx = idx % num_cols
-                with cols[col_idx]:
-                    color = attempt_colors[idx % len(attempt_colors)]
-                    
-                    # Create a colored box with checkbox inside
-                    st.markdown(f"""
-                        <div style="
-                            background-color: {color};
-                            padding: 2px;
-                            border-radius: 6px;
-                            margin-bottom: 8px;
-                        ">
-                            <div style="
-                                background-color: {color};
-                                color: white;
-                                text-align: center;
-                                font-weight: bold;
-                                padding: 4px;
-                                border-radius: 4px;
-                            ">
-                                Attempt {attempt_num}
-                            </div>
-                        </div>
-                    """, unsafe_allow_html=True)
-                    
-                    # Checkbox below the colored box
-                    is_selected = st.checkbox(
-                        "Show",
-                        value=True,  # All selected by default
-                        key=f"attempt_checkbox_{attempt_num}_{selected_student}_socratic",
-                        label_visibility="collapsed"
+            with col2:
+                if filter_type_soc == "All":
+                    selected_soc_attempt_nums = unique_soc_attempts
+                    st.info(f"Showing all {len(unique_soc_attempts)} attempts")
+                elif filter_type_soc == "Last 5":
+                    selected_soc_attempt_nums = unique_soc_attempts[-5:] if len(unique_soc_attempts) >= 5 else unique_soc_attempts
+                    st.info(f"Showing last {len(selected_soc_attempt_nums)} attempt(s): {', '.join(map(str, selected_soc_attempt_nums))}")
+                else:  # Individual
+                    selected_soc_attempt_nums = st.multiselect(
+                        label="Choose which attempts to display",
+                        options=unique_soc_attempts,
+                        default=unique_soc_attempts,
+                        key=f"attempt_multiselect_{selected_student}_socratic",
+                        label_visibility="collapsed",
+                        help="Select one or more attempts to display on the graph"
                     )
-                    
-                    if is_selected:
-                        selected_soc_attempt_nums.append(attempt_num)
             
             fig_soc = go.Figure()
             
@@ -802,50 +772,35 @@ with tab2:
             # Sort attempts to ensure proper ordering
             unique_speech_attempts = sorted(student_soc['attempt'].unique())
             
-            # Create custom colored checkbox interface for attempt selection
-            st.markdown("**Select attempts to display:**")
+            # Create organized filtering system
+            st.markdown("**Filter attempts to display:**")
+            col1, col2 = st.columns([1, 2])
             
-            # Create colored checkboxes in a grid layout
-            num_cols = min(5, len(unique_speech_attempts))  # Max 5 columns
-            cols = st.columns(num_cols)
+            with col1:
+                filter_type_speech = st.radio(
+                    "Filter type",
+                    options=["All", "Last 5", "Individual"],
+                    key=f"filter_type_{selected_student}_speech",
+                    label_visibility="collapsed",
+                    horizontal=False
+                )
             
-            selected_speech_attempt_nums = []
-            for idx, attempt_num in enumerate(unique_speech_attempts):
-                col_idx = idx % num_cols
-                with cols[col_idx]:
-                    color = attempt_colors[idx % len(attempt_colors)]
-                    
-                    # Create a colored box with checkbox inside
-                    st.markdown(f"""
-                        <div style="
-                            background-color: {color};
-                            padding: 2px;
-                            border-radius: 6px;
-                            margin-bottom: 8px;
-                        ">
-                            <div style="
-                                background-color: {color};
-                                color: white;
-                                text-align: center;
-                                font-weight: bold;
-                                padding: 4px;
-                                border-radius: 4px;
-                            ">
-                                Attempt {attempt_num}
-                            </div>
-                        </div>
-                    """, unsafe_allow_html=True)
-                    
-                    # Checkbox below the colored box
-                    is_selected = st.checkbox(
-                        "Show",
-                        value=True,  # All selected by default
-                        key=f"attempt_checkbox_{attempt_num}_{selected_student}_speech",
-                        label_visibility="collapsed"
+            with col2:
+                if filter_type_speech == "All":
+                    selected_speech_attempt_nums = unique_speech_attempts
+                    st.info(f"Showing all {len(unique_speech_attempts)} attempts")
+                elif filter_type_speech == "Last 5":
+                    selected_speech_attempt_nums = unique_speech_attempts[-5:] if len(unique_speech_attempts) >= 5 else unique_speech_attempts
+                    st.info(f"Showing last {len(selected_speech_attempt_nums)} attempt(s): {', '.join(map(str, selected_speech_attempt_nums))}")
+                else:  # Individual
+                    selected_speech_attempt_nums = st.multiselect(
+                        label="Choose which attempts to display",
+                        options=unique_speech_attempts,
+                        default=unique_speech_attempts,
+                        key=f"attempt_multiselect_{selected_student}_speech",
+                        label_visibility="collapsed",
+                        help="Select one or more attempts to display on the graph"
                     )
-                    
-                    if is_selected:
-                        selected_speech_attempt_nums.append(attempt_num)
             
             fig_speech = go.Figure()
             
