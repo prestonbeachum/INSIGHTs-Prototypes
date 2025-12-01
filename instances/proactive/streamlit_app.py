@@ -20,6 +20,7 @@ from matplotlib import cm
 import plotly.graph_objects as go
 import plotly.express as px
 import scipy.stats as stats
+import PyPDF2
 
 from simu_prototype import (
     generate_mock_data, 
@@ -51,6 +52,25 @@ def get_element_color(element_name):
     """Get the color for an element based on its domain."""
     domain = get_element_domain(element_name)
     return DOMAIN_COLORS.get(domain, "#95A5A6")  # Default gray if not found
+
+@st.cache_data
+def load_pdf_rubric():
+    """Load and extract text from the Socratic Dialogue Assessment PDF rubric."""
+    pdf_path = Path(__file__).resolve().parent.parent.parent / "docs" / "pdfs" / "Socratic Dialogue Assessment - Proactive Feedback.pdf"
+    
+    try:
+        with open(pdf_path, 'rb') as file:
+            pdf = PyPDF2.PdfReader(file)
+            full_text = ""
+            for page in pdf.pages:
+                full_text += page.extract_text() + "\n"
+            return full_text
+    except FileNotFoundError:
+        st.warning(f"PDF rubric not found at {pdf_path}")
+        return None
+    except Exception as e:
+        st.error(f"Error reading PDF rubric: {e}")
+        return None
 
 def load_ai_feedback_json():
     """Load AI feedback context from JSON file."""
@@ -994,7 +1014,11 @@ with tab2:
         
         # AI-Generated Descriptive Feedback Section
         st.markdown("---")
-        st.markdown("### 🤖 AI-Generated Descriptive Feedback")
+        st.markdown("### AI-Generated Descriptive Feedback")
+        st.caption("Based on performance data from charts above and the Socratic Dialogue Assessment rubric")
+        
+        # Load PDF rubric for reference
+        pdf_rubric = load_pdf_rubric()
         
         # Use JSON data if available, otherwise generate dynamically
         if ai_json_data:
@@ -1052,14 +1076,30 @@ with tab2:
                     speech_scores=speech_scores,
                     encounter_completeness=encounter_completeness
                 )
+                
+                # Enrich with PDF rubric context
+                if pdf_rubric:
+                    ai_context['rubric_reference'] = pdf_rubric
+                
             except Exception as e:
                 st.warning(f"⚠️ Could not generate AI feedback: {str(e)}")
                 st.info("💡 **Note:** AI-generated qualitative feedback based on performance data.")
                 ai_context = None
         
         if ai_context:
+            # Add info box about rubric integration
+            if pdf_rubric:
+                with st.expander("About This Feedback", expanded=False):
+                    st.info("""
+                    **This feedback integrates:**
+                    - Your quantitative performance data from the charts above
+                    - The comprehensive Socratic Dialogue Assessment rubric with detailed proficiency levels
+                    - Clinical reasoning transparency and shared decision-making frameworks
+                    - Speech quality metrics and communication best practices
+                    """)
+            
             # Display overall performance summary at top
-            st.markdown("#### 📊 Overall Performance")
+            st.markdown("#### Overall Performance")
             col1, col2, col3 = st.columns(3)
             
             with col1:
@@ -1087,7 +1127,8 @@ with tab2:
             
             # Display detailed domain performance
             if ai_context.get('domain_performance'):
-                st.markdown("#### 📋 Detailed Domain Performance")
+                st.markdown("#### Detailed Domain Performance")
+                st.caption("Aligned with PROaCTIVE domains and Socratic Dialogue Assessment criteria")
                 
                 for domain_key, domain_data in ai_context['domain_performance'].items():
                     with st.expander(f"**{domain_key}** - Score: {domain_data['score']:.1f}/4.0 ({domain_data['level']})", expanded=False):
@@ -1104,7 +1145,7 @@ with tab2:
             
             # Display comprehensive feedback - What student did well
             if ai_context.get('what_student_did_well'):
-                st.markdown("#### ✅ What the Student Did Well")
+                st.markdown("#### What the Student Did Well")
                 for item in ai_context['what_student_did_well']:
                     st.markdown(f"**{item['category']}**")
                     st.write(item['details'])
@@ -1112,11 +1153,131 @@ with tab2:
             
             # Display comprehensive feedback - Areas for improvement
             if ai_context.get('areas_for_improvement'):
-                st.markdown("#### 📈 Areas for Improvement")
+                st.markdown("#### Areas for Growth")
                 for item in ai_context['areas_for_improvement']:
                     st.markdown(f"**{item['category']}**")
                     st.write(item['details'])
                     st.markdown("")  # Add spacing
+            
+            # Add Key Observations section
+            st.markdown("---")
+            st.markdown("#### Key Observations")
+            
+            # Analyze trends if multiple attempts available
+            if not student_df.empty and len(student_df) > 1:
+                # Calculate domain trends
+                first_attempt = student_df.iloc[0]
+                latest_attempt = student_df.iloc[-1]
+                
+                improving_domains = []
+                declining_domains = []
+                
+                for domain in GROUPS.keys():
+                    domain_clean = domain.replace('PRO_0', '').replace('_', ' ')
+                    first_score = first_attempt[list(GROUPS[domain])].mean()
+                    latest_score = latest_attempt[list(GROUPS[domain])].mean()
+                    change = latest_score - first_score
+                    
+                    if change > 0.3:
+                        improving_domains.append((domain_clean, change))
+                    elif change < -0.3:
+                        declining_domains.append((domain_clean, abs(change)))
+                
+                if improving_domains:
+                    st.success(f"**Trending Upward:** {', '.join([f'{d} (+{c:.1f})' for d, c in improving_domains])}")
+                
+                if declining_domains:
+                    st.warning(f"**Needs Attention:** {', '.join([f'{d} (-{c:.1f})' for d, c in declining_domains])}")
+                
+                # Progress indicator
+                attempts_count = len(student_df)
+                if attempts_count >= 3:
+                    recent_avg = student_df.tail(3)[ELEMENTS].mean().mean()
+                    overall_avg = student_df[ELEMENTS].mean().mean()
+                    if recent_avg > overall_avg:
+                        st.info(f"**Recent Performance:** Your last 3 attempts averaged {recent_avg:.2f}, above your overall average of {overall_avg:.2f}")
+            
+            # Add Actionable Recommendations section
+            st.markdown("---")
+            st.markdown("#### Actionable Recommendations")
+            
+            # Generate recommendations based on lowest scoring domains
+            recommendations = []
+            
+            for domain, score in ai_context['chart_data']['domain_scores'].items():
+                domain_clean = domain.replace('PRO_0', '').replace('_', ' ')
+                
+                if score < 2.5:
+                    if 'Question' in domain:
+                        recommendations.append({
+                            'focus': domain_clean,
+                            'action': 'Practice asking follow-up questions that explore patient concerns and beliefs. Move beyond fact-gathering to understanding.',
+                            'tip': 'Try: "What worries you most about this?" or "How does this affect your daily life?"'
+                        })
+                    elif 'Response' in domain:
+                        recommendations.append({
+                            'focus': domain_clean,
+                            'action': 'Work on active listening - pause after patient responses and acknowledge what you heard before moving to the next question.',
+                            'tip': 'Use reflective statements: "It sounds like..." or "What I\'m hearing is..."'
+                        })
+                    elif 'Critical' in domain:
+                        recommendations.append({
+                            'focus': domain_clean,
+                            'action': 'Share your clinical reasoning aloud. Explain why you\'re asking certain questions or considering specific diagnoses.',
+                            'tip': 'Practice transparency: "I\'m asking this because..." or "I\'m wondering if..."'
+                        })
+                    elif 'Humility' in domain:
+                        recommendations.append({
+                            'focus': domain_clean,
+                            'action': 'Include the patient in decision-making. Use collaborative language and acknowledge their expertise about their own body.',
+                            'tip': 'Try phrases like: "What do you think about..." or "Does this plan work for you?"'
+                        })
+                    elif 'Reflective' in domain:
+                        recommendations.append({
+                            'focus': domain_clean,
+                            'action': 'After each encounter, identify one thing you would do differently. Adjust your approach in real-time when you notice communication gaps.',
+                            'tip': 'Ask yourself: "What worked well?" and "What would I change next time?"'
+                        })
+            
+            if recommendations:
+                for rec in recommendations[:3]:  # Show top 3 recommendations
+                    with st.container():
+                        st.markdown(f"**Focus Area:** {rec['focus']}")
+                        st.write(f"**Action:** {rec['action']}")
+                        st.info(f"**Tip:** {rec['tip']}")
+                        st.markdown("")
+            else:
+                st.success("Great work! Continue practicing to maintain your current proficiency levels and work toward advanced mastery.")
+            
+            # Add Practice Suggestions based on speech and socratic scores
+            if not student_soc.empty:
+                st.markdown("---")
+                st.markdown("#### Practice Suggestions")
+                
+                practice_tips = []
+                latest_soc = student_soc.iloc[-1]
+                
+                # Check Socratic components
+                if latest_soc['socratic_Question_Depth'] < 3.0:
+                    practice_tips.append("**Question Depth:** Review the Socratic questioning framework. Practice moving from surface-level to deeper exploratory questions.")
+                
+                if latest_soc['socratic_Response_Completeness'] < 3.0:
+                    practice_tips.append("**Active Listening:** Record yourself and review how completely you address patient concerns. Practice summarizing what you heard.")
+                
+                # Check speech metrics
+                if latest_soc['speech_pace'] < 6.0:
+                    practice_tips.append("**Speaking Pace:** Your pace may be too slow. Practice maintaining conversational flow while still allowing patient processing time.")
+                elif latest_soc['speech_pace'] > 9.0:
+                    practice_tips.append("**Speaking Pace:** Slow down slightly. Patients need time to process medical information.")
+                
+                if latest_soc['speech_pauses'] < 6.0:
+                    practice_tips.append("**Pauses:** Incorporate more meaningful pauses after asking important questions. Silence is okay - it gives patients time to think.")
+                
+                if practice_tips:
+                    for tip in practice_tips:
+                        st.markdown(f"• {tip}")
+                else:
+                    st.info("Your Socratic dialogue and speech quality metrics show strong performance. Keep up the excellent work!")
     else:
         st.warning(f"No data for {selected_student}")
 
