@@ -414,24 +414,17 @@ with tab2:
             student_copy[gname] = student_copy[elements].mean(axis=1)
         latest_attempt = student_copy.sort_values('attempt', ascending=False).iloc[0]
         
-        # ===== SECTION 1: DOMAIN SCORES =====
+        # Chart Selection Radio Button
         st.markdown("---")
-        # Domain Scores Chart
-        st.markdown("##### Domain Scores Across Domains (0-4 rubric scale)")
-        st.caption("Performance across all 5 PROaCTIVE domains for each attempt")
+        st.markdown("#### Performance Visualization")
+        chart_selection = st.radio(
+            "Select chart to display:",
+            options=["Domain Scores", "Socratic Dialogue Components", "Speech Quality Metrics"],
+            horizontal=True,
+            key=f"chart_type_{selected_student}"
+        )
         
-        # Use all student data for visualization
-        student_copy_domains = student_df.copy()
-        
-        # Calculate domain scores for each attempt
-        for gname, elements in GROUPS.items():
-            student_copy_domains[gname] = student_copy_domains[elements].mean(axis=1)
-        
-        # Create readable domain names in order
-        domain_names = [g.replace('PRO_0', '').replace('_', ' ') for g in GROUPS.keys()]
-        domain_keys = list(GROUPS.keys())
-        
-        # Define 15 distinct colors for up to 15 attempts
+        # Define 15 distinct colors for up to 15 attempts (shared across all chart types)
         attempt_colors = [
             '#E74C3C',  # Red
             '#3498DB',  # Blue
@@ -450,469 +443,554 @@ with tab2:
             '#27AE60',  # Dark Green
         ]
         
-        # Sort attempts to ensure proper ordering
-        unique_attempts = sorted(student_copy_domains['attempt'].unique())
-        
-        # Create organized filtering system
-        st.markdown("**Filter attempts to display:**")
-        col1, col2 = st.columns([1, 2])
-        
-        with col1:
-            filter_type = st.radio(
-                "Filter type",
-                options=["All", "Last 5", "Individual"],
-                key=f"filter_type_{selected_student}_domain",
-                label_visibility="collapsed",
-                horizontal=False
-            )
-        
-        with col2:
-            if filter_type == "All":
-                selected_attempt_nums = unique_attempts
-                st.info(f"Showing all {len(unique_attempts)} attempts")
-            elif filter_type == "Last 5":
-                selected_attempt_nums = unique_attempts[-5:] if len(unique_attempts) >= 5 else unique_attempts
-                st.info(f"Showing last {len(selected_attempt_nums)} attempt(s): {', '.join(map(str, selected_attempt_nums))}")
-            else:  # Individual
-                selected_attempt_nums = st.multiselect(
-                    label="Choose which attempts to display",
-                    options=unique_attempts,
-                    default=unique_attempts,
-                    key=f"attempt_multiselect_{selected_student}_domain",
-                    label_visibility="collapsed",
-                    help="Select one or more attempts to display on the graph"
-                )
-        
-        fig = go.Figure()
-        
-        # Create a line for each selected attempt
-        for idx, attempt_num in enumerate(unique_attempts):
-            if attempt_num not in selected_attempt_nums:
-                continue  # Skip unselected attempts
-                
-            attempt_data = student_copy_domains[student_copy_domains['attempt'] == attempt_num].iloc[0]
+        # ===== SECTION 1: DOMAIN SCORES =====
+        if chart_selection == "Domain Scores":
+            st.markdown("---")
+            # Domain Scores Chart
+            st.markdown("##### Domain Scores Across Domains (0-4 rubric scale)")
+            st.caption("Performance across all 5 PROaCTIVE domains for each attempt")
             
-            # Get scores for each domain for this attempt
-            scores = [attempt_data[domain_key] for domain_key in domain_keys]
+            # Use all student data for visualization
+            student_copy_domains = student_df.copy()
             
-            # Use modulo to cycle colors if more than 15 attempts
-            color = attempt_colors[idx % len(attempt_colors)]
+            # Calculate domain scores for each attempt
+            for gname, elements in GROUPS.items():
+                student_copy_domains[gname] = student_copy_domains[elements].mean(axis=1)
             
-            fig.add_trace(go.Scatter(
-                x=domain_names,
-                y=scores,
-                mode='lines+markers',
-                name=f'Attempt {attempt_num}',
-                line=dict(color=color, width=2.5),
-                marker=dict(size=8, symbol='circle', line=dict(width=1, color='white')),
-                hovertemplate='<b>%{fullData.name}</b><br>%{x}<br>Score: %{y:.2f}<extra></extra>'
-            ))
-        
-        fig.update_layout(
-            xaxis=dict(
-                title='PROaCTIVE Domain',
-                showgrid=True,
-                gridcolor='rgba(200, 200, 200, 0.3)',
-                title_font=dict(color='#000000', size=12),
-                tickfont=dict(color='#000000', size=10),
-                tickangle=-15
-            ),
-            yaxis=dict(
-                title='Score (0-4 rubric scale)',
-                range=[0, 4.2],
-                showgrid=True,
-                gridcolor='rgba(200, 200, 200, 0.3)',
-                title_font=dict(color='#000000', size=12),
-                tickfont=dict(color='#000000')
-            ),
-            height=400,
-            margin=dict(l=50, r=20, t=20, b=100),
-            plot_bgcolor='white',
-            paper_bgcolor='white',
-            font=dict(color='#000000'),
-            showlegend=False,
-            hovermode='closest'
-        )
-        st.plotly_chart(fig, use_container_width=True)
-        
-        # Descriptive Statistics for Domain Scores
-        st.markdown("##### Descriptive Statistics")
-        st.caption(f"Statistics for {len(selected_attempt_nums)} selected attempt(s) across all domains")
-        
-        # Calculate statistics from selected attempts only
-        selected_domains_data = student_copy_domains[student_copy_domains['attempt'].isin(selected_attempt_nums)]
-        all_domain_scores = []
-        for domain_key in domain_keys:
-            all_domain_scores.extend(selected_domains_data[domain_key].tolist())
-        
-        if all_domain_scores:
-            stats_data = {
-                "Statistic": ["Mean", "Median", "Min", "Max", "Range", "Std Dev", "Variance"],
-                "Value": [
-                    f"{np.mean(all_domain_scores):.2f}",
-                    f"{np.median(all_domain_scores):.2f}",
-                    f"{np.min(all_domain_scores):.2f}",
-                    f"{np.max(all_domain_scores):.2f}",
-                    f"{np.max(all_domain_scores) - np.min(all_domain_scores):.2f}",
-                    f"{np.std(all_domain_scores, ddof=1):.2f}" if len(all_domain_scores) > 1 else "N/A",
-                    f"{np.var(all_domain_scores, ddof=1):.2f}" if len(all_domain_scores) > 1 else "N/A"
-                ]
-            }
+            # Create readable domain names in order
+            domain_names = [g.replace('PRO_0', '').replace('_', ' ') for g in GROUPS.keys()]
+            domain_keys = list(GROUPS.keys())
             
-            col1, col2 = st.columns(2)
+            # Sort attempts to ensure proper ordering
+            unique_attempts = sorted(student_copy_domains['attempt'].unique())
+            
+            # Create organized filtering system
+            st.markdown("**Filter attempts to display:**")
+            col1, col2 = st.columns([1, 2])
+            
             with col1:
-                st.dataframe(pd.DataFrame(stats_data), hide_index=True, use_container_width=True)
+                filter_type = st.radio(
+                    "Filter type",
+                    options=["All", "Last 5", "Individual"],
+                    key=f"filter_type_{selected_student}_domain",
+                    label_visibility="collapsed",
+                    horizontal=False
+                )
             
             with col2:
-                # Summary info
-                st.markdown("**Summary**")
-                st.write(f"Selected Attempts: {len(selected_attempt_nums)}")
-                st.write(f"Domains Tracked: {len(domain_keys)}")
-                st.write(f"Data Points: {len(all_domain_scores)}")
-                
-                # Improvement indicator (only if multiple attempts selected)
-                if len(selected_attempt_nums) > 1:
-                    sorted_selected = sorted(selected_attempt_nums)
-                    first_attempt_avg = student_copy_domains[student_copy_domains['attempt'] == sorted_selected[0]][domain_keys].mean().mean()
-                    last_attempt_avg = student_copy_domains[student_copy_domains['attempt'] == sorted_selected[-1]][domain_keys].mean().mean()
-                    improvement = last_attempt_avg - first_attempt_avg
+                if filter_type == "All":
+                    selected_attempt_nums = unique_attempts
+                    st.info(f"Showing all {len(unique_attempts)} attempts")
+                elif filter_type == "Last 5":
+                    selected_attempt_nums = unique_attempts[-5:] if len(unique_attempts) >= 5 else unique_attempts
+                    st.info(f"Showing last {len(selected_attempt_nums)} attempt(s): {', '.join(map(str, selected_attempt_nums))}")
+                else:  # Individual
+                    selected_attempt_nums = st.multiselect(
+                        label="Choose which attempts to display",
+                        options=unique_attempts,
+                        default=unique_attempts,
+                        key=f"attempt_multiselect_{selected_student}_domain",
+                        label_visibility="collapsed",
+                        help="Select one or more attempts to display on the graph"
+                    )
+            
+            fig = go.Figure()
+            
+            # Create a line for each selected attempt
+            for idx, attempt_num in enumerate(unique_attempts):
+                if attempt_num not in selected_attempt_nums:
+                    continue  # Skip unselected attempts
                     
-                    if improvement > 0:
-                        st.success(f"📈 Improvement: +{improvement:.2f} points")
-                    elif improvement < 0:
-                        st.warning(f"📉 Change: {improvement:.2f} points")
+                attempt_data = student_copy_domains[student_copy_domains['attempt'] == attempt_num].iloc[0]
+                
+                # Get scores for each domain for this attempt
+                scores = [attempt_data[domain_key] for domain_key in domain_keys]
+                
+                # Use modulo to cycle colors if more than 15 attempts
+                color = attempt_colors[idx % len(attempt_colors)]
+                
+                fig.add_trace(go.Scatter(
+                    x=domain_names,
+                    y=scores,
+                    mode='lines+markers',
+                    name=f'Attempt {attempt_num}',
+                    line=dict(color=color, width=2.5),
+                    marker=dict(size=8, symbol='circle', line=dict(width=1, color='white')),
+                    hovertemplate='<b>%{fullData.name}</b><br>%{x}<br>Score: %{y:.2f}<extra></extra>'
+                ))
+            
+            # Add average reference line showing average for each domain
+            if selected_attempt_nums:
+                selected_domains_data_for_stats = student_copy_domains[student_copy_domains['attempt'].isin(selected_attempt_nums)]
+                # Calculate average for each domain across selected attempts
+                domain_averages = []
+                for domain_key in domain_keys:
+                    domain_averages.append(selected_domains_data_for_stats[domain_key].mean())
+                
+                if domain_averages:
+                    # Add average line trace
+                    fig.add_trace(go.Scatter(
+                        x=domain_names,
+                        y=domain_averages,
+                        mode='lines',
+                        name='Average',
+                        line=dict(color='black', width=2, dash='dot'),
+                        hovertemplate='<b>Average</b><br>%{x}<br>Score: %{y:.2f}<extra></extra>'
+                    ))
+            
+            fig.update_layout(
+                xaxis=dict(
+                    title='PROaCTIVE Domain',
+                    showgrid=True,
+                    gridcolor='rgba(200, 200, 200, 0.3)',
+                    title_font=dict(color='#000000', size=12),
+                    tickfont=dict(color='#000000', size=10),
+                    tickangle=-15
+                ),
+                yaxis=dict(
+                    title='Score (0-4 rubric scale)',
+                    range=[0, 4.2],
+                    showgrid=True,
+                    gridcolor='rgba(200, 200, 200, 0.3)',
+                    title_font=dict(color='#000000', size=12),
+                    tickfont=dict(color='#000000')
+                ),
+                height=400,
+                margin=dict(l=50, r=20, t=20, b=100),
+                plot_bgcolor='white',
+                paper_bgcolor='white',
+                font=dict(color='#000000'),
+                showlegend=False,
+                hovermode='closest'
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Descriptive Statistics for Domain Scores
+            st.markdown("##### Descriptive Statistics")
+            st.caption(f"Statistics for {len(selected_attempt_nums)} selected attempt(s) across all domains")
+            
+            # Calculate statistics from selected attempts only
+            selected_domains_data = student_copy_domains[student_copy_domains['attempt'].isin(selected_attempt_nums)]
+            all_domain_scores = []
+            for domain_key in domain_keys:
+                all_domain_scores.extend(selected_domains_data[domain_key].tolist())
+            
+            if all_domain_scores:
+                stats_data = {
+                    "Statistic": ["Mean", "Median", "Min", "Max", "Range", "Std Dev", "Variance"],
+                    "Value": [
+                        f"{np.mean(all_domain_scores):.2f}",
+                        f"{np.median(all_domain_scores):.2f}",
+                        f"{np.min(all_domain_scores):.2f}",
+                        f"{np.max(all_domain_scores):.2f}",
+                        f"{np.max(all_domain_scores) - np.min(all_domain_scores):.2f}",
+                        f"{np.std(all_domain_scores, ddof=1):.2f}" if len(all_domain_scores) > 1 else "N/A",
+                        f"{np.var(all_domain_scores, ddof=1):.2f}" if len(all_domain_scores) > 1 else "N/A"
+                    ]
+                }
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.dataframe(pd.DataFrame(stats_data), hide_index=True, use_container_width=True)
+                
+                with col2:
+                    # Summary info
+                    st.markdown("**Summary**")
+                    st.write(f"Selected Attempts: {len(selected_attempt_nums)}")
+                    st.write(f"Domains Tracked: {len(domain_keys)}")
+                    st.write(f"Data Points: {len(all_domain_scores)}")
+                    
+                    # Improvement indicator (only if multiple attempts selected)
+                    if len(selected_attempt_nums) > 1:
+                        sorted_selected = sorted(selected_attempt_nums)
+                        first_attempt_avg = student_copy_domains[student_copy_domains['attempt'] == sorted_selected[0]][domain_keys].mean().mean()
+                        last_attempt_avg = student_copy_domains[student_copy_domains['attempt'] == sorted_selected[-1]][domain_keys].mean().mean()
+                        improvement = last_attempt_avg - first_attempt_avg
+                        
+                        if improvement > 0:
+                            st.success(f"📈 Improvement: +{improvement:.2f} points")
+                        elif improvement < 0:
+                            st.warning(f"📉 Change: {improvement:.2f} points")
+                        else:
+                            st.info(f"➡️ No change: {improvement:.2f} points")
                     else:
-                        st.info(f"➡️ No change: {improvement:.2f} points")
-        else:
-            st.info("Please select at least one attempt to view statistics")
+                        st.info("Please select at least one attempt to view statistics")
         
         # ===== SECTION 2: SOCRATIC DIALOGUE COMPONENTS =====
-        st.markdown("---")
-        # Socratic Components Chart
-        st.markdown("##### Socratic Dialogue Components Across Components (0-5.0 scale)")
-        st.caption("Performance across all 5 Socratic components for each attempt")
-        
-        # Check if socratic data is available
-        if not student_soc.empty:
-            # Define socratic components
-            socratic_components = {
-                'WONDER': 'socratic_Question_Depth',
-                'REFLECT': 'socratic_Response_Completeness',
-                'REFINE': 'socratic_Assumption_Recognition',
-                'RESTATE': 'socratic_Plan_Flexibility',
-                'REPEAT': 'socratic_In-Encounter_Adjustment'
-            }
+        elif chart_selection == "Socratic Dialogue Components":
+            st.markdown("---")
+            # Socratic Components Chart
+            st.markdown("##### Socratic Dialogue Components Across Components (0-5.0 scale)")
+            st.caption("Performance across all 5 Socratic components for each attempt")
             
-            # Get component names and column names
-            component_names = list(socratic_components.keys())
-            component_cols = list(socratic_components.values())
-            
-            # Sort attempts to ensure proper ordering
-            unique_soc_attempts = sorted(student_soc['attempt'].unique())
-            
-            # Create organized filtering system
-            st.markdown("**Filter attempts to display:**")
-            col1, col2 = st.columns([1, 2])
-            
-            with col1:
-                filter_type_soc = st.radio(
-                    "Filter type",
-                    options=["All", "Last 5", "Individual"],
-                    key=f"filter_type_{selected_student}_socratic",
-                    label_visibility="collapsed",
-                    horizontal=False
-                )
-            
-            with col2:
-                if filter_type_soc == "All":
-                    selected_soc_attempt_nums = unique_soc_attempts
-                    st.info(f"Showing all {len(unique_soc_attempts)} attempts")
-                elif filter_type_soc == "Last 5":
-                    selected_soc_attempt_nums = unique_soc_attempts[-5:] if len(unique_soc_attempts) >= 5 else unique_soc_attempts
-                    st.info(f"Showing last {len(selected_soc_attempt_nums)} attempt(s): {', '.join(map(str, selected_soc_attempt_nums))}")
-                else:  # Individual
-                    selected_soc_attempt_nums = st.multiselect(
-                        label="Choose which attempts to display",
-                        options=unique_soc_attempts,
-                        default=unique_soc_attempts,
-                        key=f"attempt_multiselect_{selected_student}_socratic",
-                        label_visibility="collapsed",
-                        help="Select one or more attempts to display on the graph"
-                    )
-            
-            fig_soc = go.Figure()
-            
-            # Create a line for each selected attempt
-            for idx, attempt_num in enumerate(unique_soc_attempts):
-                if attempt_num not in selected_soc_attempt_nums:
-                    continue  # Skip unselected attempts
-                    
-                attempt_soc_data = student_soc[student_soc['attempt'] == attempt_num].iloc[0]
-                
-                # Get scores for each component for this attempt
-                scores = []
-                for col_name in component_cols:
-                    if col_name in attempt_soc_data:
-                        scores.append(attempt_soc_data[col_name])
-                    else:
-                        scores.append(0)  # Default to 0 if not available
-                
-                # Use modulo to cycle colors if more than 15 attempts
-                color = attempt_colors[idx % len(attempt_colors)]
-                
-                fig_soc.add_trace(go.Scatter(
-                    x=component_names,
-                    y=scores,
-                    mode='lines+markers',
-                    name=f'Attempt {attempt_num}',
-                    line=dict(color=color, width=2.5),
-                    marker=dict(size=8, symbol='circle', line=dict(width=1, color='white')),
-                    hovertemplate='<b>%{fullData.name}</b><br>%{x}<br>Score: %{y:.2f}<extra></extra>'
-                ))
-            
-            fig_soc.update_layout(
-                xaxis=dict(
-                    title='Socratic Component',
-                    showgrid=True,
-                    gridcolor='rgba(200, 200, 200, 0.3)',
-                    title_font=dict(color='#000000', size=12),
-                    tickfont=dict(color='#000000', size=10)
-                ),
-                yaxis=dict(
-                    title='Score (0-5.0 scale)',
-                    range=[0, 5.5],
-                    showgrid=True,
-                    gridcolor='rgba(200, 200, 200, 0.3)',
-                    title_font=dict(color='#000000', size=12),
-                    tickfont=dict(color='#000000')
-                ),
-                height=400,
-                margin=dict(l=50, r=20, t=20, b=100),
-                plot_bgcolor='white',
-                paper_bgcolor='white',
-                font=dict(color='#000000'),
-                showlegend=False,
-                hovermode='closest'
-            )
-            st.plotly_chart(fig_soc, use_container_width=True)
-            
-            # Descriptive Statistics for Socratic Components
-            st.markdown("##### Descriptive Statistics")
-            st.caption(f"Statistics for {len(selected_soc_attempt_nums)} selected attempt(s) across all components")
-            
-            # Calculate statistics from selected attempts only
-            selected_soc_data = student_soc[student_soc['attempt'].isin(selected_soc_attempt_nums)]
-            all_soc_scores = []
-            for col_name in component_cols:
-                if col_name in selected_soc_data.columns:
-                    all_soc_scores.extend(selected_soc_data[col_name].dropna().tolist())
-            
-            if all_soc_scores:
-                stats_data_soc = {
-                    "Statistic": ["Mean", "Median", "Min", "Max", "Range", "Std Dev", "Variance"],
-                    "Value": [
-                        f"{np.mean(all_soc_scores):.2f}",
-                        f"{np.median(all_soc_scores):.2f}",
-                        f"{np.min(all_soc_scores):.2f}",
-                        f"{np.max(all_soc_scores):.2f}",
-                        f"{np.max(all_soc_scores) - np.min(all_soc_scores):.2f}",
-                        f"{np.std(all_soc_scores, ddof=1):.2f}" if len(all_soc_scores) > 1 else "N/A",
-                        f"{np.var(all_soc_scores, ddof=1):.2f}" if len(all_soc_scores) > 1 else "N/A"
-                    ]
+            # Check if socratic data is available
+            if not student_soc.empty:
+                # Define socratic components
+                socratic_components = {
+                    'WONDER': 'socratic_Question_Depth',
+                    'REFLECT': 'socratic_Response_Completeness',
+                    'REFINE': 'socratic_Assumption_Recognition',
+                    'RESTATE': 'socratic_Plan_Flexibility',
+                    'REPEAT': 'socratic_In-Encounter_Adjustment'
                 }
                 
-                col1, col2 = st.columns(2)
+                # Get component names and column names
+                component_names = list(socratic_components.keys())
+                component_cols = list(socratic_components.values())
+                
+                # Sort attempts to ensure proper ordering
+                unique_soc_attempts = sorted(student_soc['attempt'].unique())
+                
+                # Create organized filtering system
+                st.markdown("**Filter attempts to display:**")
+                col1, col2 = st.columns([1, 2])
+                
                 with col1:
-                    st.dataframe(pd.DataFrame(stats_data_soc), hide_index=True, use_container_width=True)
+                    filter_type_soc = st.radio(
+                        "Filter type",
+                        options=["All", "Last 5", "Individual"],
+                        key=f"filter_type_{selected_student}_socratic",
+                        label_visibility="collapsed",
+                        horizontal=False
+                    )
                 
                 with col2:
-                    # Summary info
-                    st.markdown("**Summary**")
-                    st.write(f"Selected Attempts: {len(selected_soc_attempt_nums)}")
-                    st.write(f"Components Tracked: {len(component_names)}")
-                    st.write(f"Data Points: {len(all_soc_scores)}")
-                    
-                    # Improvement indicator (only if multiple attempts selected)
-                    if len(selected_soc_attempt_nums) > 1:
-                        sorted_selected_soc = sorted(selected_soc_attempt_nums)
-                        first_attempt_avg = student_soc[student_soc['attempt'] == sorted_selected_soc[0]][component_cols].mean().mean()
-                        last_attempt_avg = student_soc[student_soc['attempt'] == sorted_selected_soc[-1]][component_cols].mean().mean()
-                        improvement = last_attempt_avg - first_attempt_avg
+                    if filter_type_soc == "All":
+                        selected_soc_attempt_nums = unique_soc_attempts
+                        st.info(f"Showing all {len(unique_soc_attempts)} attempts")
+                    elif filter_type_soc == "Last 5":
+                        selected_soc_attempt_nums = unique_soc_attempts[-5:] if len(unique_soc_attempts) >= 5 else unique_soc_attempts
+                        st.info(f"Showing last {len(selected_soc_attempt_nums)} attempt(s): {', '.join(map(str, selected_soc_attempt_nums))}")
+                    else:  # Individual
+                        selected_soc_attempt_nums = st.multiselect(
+                            label="Choose which attempts to display",
+                            options=unique_soc_attempts,
+                            default=unique_soc_attempts,
+                            key=f"attempt_multiselect_{selected_student}_socratic",
+                            label_visibility="collapsed",
+                            help="Select one or more attempts to display on the graph"
+                        )
+                
+                fig_soc = go.Figure()
+                
+                # Create a line for each selected attempt
+                for idx, attempt_num in enumerate(unique_soc_attempts):
+                    if attempt_num not in selected_soc_attempt_nums:
+                        continue  # Skip unselected attempts
                         
-                        if improvement > 0:
-                            st.success(f"📈 Improvement: +{improvement:.2f} points")
-                        elif improvement < 0:
-                            st.warning(f"📉 Change: {improvement:.2f} points")
+                    attempt_soc_data = student_soc[student_soc['attempt'] == attempt_num].iloc[0]
+                    
+                    # Get scores for each component for this attempt
+                    scores = []
+                    for col_name in component_cols:
+                        if col_name in attempt_soc_data:
+                            scores.append(attempt_soc_data[col_name])
                         else:
-                            st.info(f"➡️ No change: {improvement:.2f} points")
+                            scores.append(0)  # Default to 0 if not available
+                    
+                    # Use modulo to cycle colors if more than 15 attempts
+                    color = attempt_colors[idx % len(attempt_colors)]
+                    
+                    fig_soc.add_trace(go.Scatter(
+                        x=component_names,
+                        y=scores,
+                        mode='lines+markers',
+                        name=f'Attempt {attempt_num}',
+                        line=dict(color=color, width=2.5),
+                        marker=dict(size=8, symbol='circle', line=dict(width=1, color='white')),
+                        hovertemplate='<b>%{fullData.name}</b><br>%{x}<br>Score: %{y:.2f}<extra></extra>'
+                    ))
+                
+                # Add average reference line showing average for each component
+                if selected_soc_attempt_nums:
+                    selected_soc_data_for_stats = student_soc[student_soc['attempt'].isin(selected_soc_attempt_nums)]
+                    # Calculate average for each component across selected attempts
+                    component_averages = []
+                    for col_name in component_cols:
+                        if col_name in selected_soc_data_for_stats.columns:
+                            component_averages.append(selected_soc_data_for_stats[col_name].mean())
+                        else:
+                            component_averages.append(0)
+                    
+                    if component_averages:
+                        # Add average line trace
+                        fig_soc.add_trace(go.Scatter(
+                            x=component_names,
+                            y=component_averages,
+                            mode='lines',
+                            name='Average',
+                            line=dict(color='black', width=2, dash='dot'),
+                            hovertemplate='<b>Average</b><br>%{x}<br>Score: %{y:.2f}<extra></extra>'
+                        ))
+                
+                fig_soc.update_layout(
+                    xaxis=dict(
+                        title='Socratic Component',
+                        showgrid=True,
+                        gridcolor='rgba(200, 200, 200, 0.3)',
+                        title_font=dict(color='#000000', size=12),
+                        tickfont=dict(color='#000000', size=10)
+                    ),
+                    yaxis=dict(
+                        title='Score (0-5.0 scale)',
+                        range=[0, 5.5],
+                        showgrid=True,
+                        gridcolor='rgba(200, 200, 200, 0.3)',
+                        title_font=dict(color='#000000', size=12),
+                        tickfont=dict(color='#000000')
+                    ),
+                    height=400,
+                    margin=dict(l=50, r=20, t=20, b=100),
+                    plot_bgcolor='white',
+                    paper_bgcolor='white',
+                    font=dict(color='#000000'),
+                    showlegend=False,
+                    hovermode='closest'
+                )
+                st.plotly_chart(fig_soc, use_container_width=True)
+                
+                # Descriptive Statistics for Socratic Components
+                st.markdown("##### Descriptive Statistics")
+                st.caption(f"Statistics for {len(selected_soc_attempt_nums)} selected attempt(s) across all components")
+                
+                # Calculate statistics from selected attempts only
+                selected_soc_data = student_soc[student_soc['attempt'].isin(selected_soc_attempt_nums)]
+                all_soc_scores = []
+                for col_name in component_cols:
+                    if col_name in selected_soc_data.columns:
+                        all_soc_scores.extend(selected_soc_data[col_name].dropna().tolist())
+                
+                if all_soc_scores:
+                    stats_data_soc = {
+                        "Statistic": ["Mean", "Median", "Min", "Max", "Range", "Std Dev", "Variance"],
+                        "Value": [
+                            f"{np.mean(all_soc_scores):.2f}",
+                            f"{np.median(all_soc_scores):.2f}",
+                            f"{np.min(all_soc_scores):.2f}",
+                            f"{np.max(all_soc_scores):.2f}",
+                            f"{np.max(all_soc_scores) - np.min(all_soc_scores):.2f}",
+                            f"{np.std(all_soc_scores, ddof=1):.2f}" if len(all_soc_scores) > 1 else "N/A",
+                            f"{np.var(all_soc_scores, ddof=1):.2f}" if len(all_soc_scores) > 1 else "N/A"
+                        ]
+                    }
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.dataframe(pd.DataFrame(stats_data_soc), hide_index=True, use_container_width=True)
+                    
+                    with col2:
+                        # Summary info
+                        st.markdown("**Summary**")
+                        st.write(f"Selected Attempts: {len(selected_soc_attempt_nums)}")
+                        st.write(f"Components Tracked: {len(component_names)}")
+                        st.write(f"Data Points: {len(all_soc_scores)}")
+                        
+                        # Improvement indicator (only if multiple attempts selected)
+                        if len(selected_soc_attempt_nums) > 1:
+                            sorted_selected_soc = sorted(selected_soc_attempt_nums)
+                            first_attempt_avg = student_soc[student_soc['attempt'] == sorted_selected_soc[0]][component_cols].mean().mean()
+                            last_attempt_avg = student_soc[student_soc['attempt'] == sorted_selected_soc[-1]][component_cols].mean().mean()
+                            improvement = last_attempt_avg - first_attempt_avg
+                            
+                            if improvement > 0:
+                                st.success(f"📈 Improvement: +{improvement:.2f} points")
+                            elif improvement < 0:
+                                st.warning(f"📉 Change: {improvement:.2f} points")
+                            else:
+                                st.info(f"➡️ No change: {improvement:.2f} points")
+                        else:
+                            st.info("Please select at least one attempt to view statistics")
+                else:
+                    st.info("Socratic component data not available for this student/iteration")
             else:
-                st.info("Please select at least one attempt to view statistics")
-        else:
-            st.info("Socratic component data not available for this student/iteration")
+                st.info("Socratic component data not available for this student/iteration")
         
         # ===== SECTION 3: SPEECH QUALITY METRICS =====
-        st.markdown("---")
-        st.markdown("##### Speech Quality Metrics Across Metrics (0-10 scale)")
-        st.caption("Performance across all 4 speech quality metrics for each attempt")
-        
-        # Check if speech data is available
-        if not student_soc.empty:
-            # Define speech metrics
-            speech_metrics = {
-                'Volume': 'speech_volume',
-                'Pace': 'speech_pace',
-                'Pitch': 'speech_pitch',
-                'Pauses': 'speech_pauses'
-            }
+        elif chart_selection == "Speech Quality Metrics":
+            st.markdown("---")
+            st.markdown("##### Speech Quality Metrics Across Metrics (0-10 scale)")
+            st.caption("Performance across all 4 speech quality metrics for each attempt")
             
-            # Get metric names and column names
-            metric_names = list(speech_metrics.keys())
-            metric_cols = list(speech_metrics.values())
-            
-            # Sort attempts to ensure proper ordering
-            unique_speech_attempts = sorted(student_soc['attempt'].unique())
-            
-            # Create organized filtering system
-            st.markdown("**Filter attempts to display:**")
-            col1, col2 = st.columns([1, 2])
-            
-            with col1:
-                filter_type_speech = st.radio(
-                    "Filter type",
-                    options=["All", "Last 5", "Individual"],
-                    key=f"filter_type_{selected_student}_speech",
-                    label_visibility="collapsed",
-                    horizontal=False
-                )
-            
-            with col2:
-                if filter_type_speech == "All":
-                    selected_speech_attempt_nums = unique_speech_attempts
-                    st.info(f"Showing all {len(unique_speech_attempts)} attempts")
-                elif filter_type_speech == "Last 5":
-                    selected_speech_attempt_nums = unique_speech_attempts[-5:] if len(unique_speech_attempts) >= 5 else unique_speech_attempts
-                    st.info(f"Showing last {len(selected_speech_attempt_nums)} attempt(s): {', '.join(map(str, selected_speech_attempt_nums))}")
-                else:  # Individual
-                    selected_speech_attempt_nums = st.multiselect(
-                        label="Choose which attempts to display",
-                        options=unique_speech_attempts,
-                        default=unique_speech_attempts,
-                        key=f"attempt_multiselect_{selected_student}_speech",
-                        label_visibility="collapsed",
-                        help="Select one or more attempts to display on the graph"
-                    )
-            
-            fig_speech = go.Figure()
-            
-            # Create a line for each selected attempt
-            for idx, attempt_num in enumerate(unique_speech_attempts):
-                if attempt_num not in selected_speech_attempt_nums:
-                    continue  # Skip unselected attempts
-                    
-                attempt_speech_data = student_soc[student_soc['attempt'] == attempt_num].iloc[0]
-                
-                # Get scores for each metric for this attempt
-                scores = []
-                for col_name in metric_cols:
-                    if col_name in attempt_speech_data and pd.notna(attempt_speech_data[col_name]):
-                        scores.append(attempt_speech_data[col_name])
-                    else:
-                        scores.append(0)  # Default to 0 if not available
-                
-                # Use modulo to cycle colors if more than 15 attempts
-                color = attempt_colors[idx % len(attempt_colors)]
-                
-                fig_speech.add_trace(go.Scatter(
-                    x=metric_names,
-                    y=scores,
-                    mode='lines+markers',
-                    name=f'Attempt {attempt_num}',
-                    line=dict(color=color, width=2.5),
-                    marker=dict(size=8, symbol='circle', line=dict(width=1, color='white')),
-                    hovertemplate='<b>%{fullData.name}</b><br>%{x}<br>Score: %{y:.2f}<extra></extra>'
-                ))
-            
-            fig_speech.update_layout(
-                xaxis=dict(
-                    title='Speech Quality Metric',
-                    showgrid=True,
-                    gridcolor='rgba(200, 200, 200, 0.3)',
-                    title_font=dict(color='#000000', size=12),
-                    tickfont=dict(color='#000000', size=10)
-                ),
-                yaxis=dict(
-                    title='Score (0-10 scale)',
-                    range=[0, 11],
-                    showgrid=True,
-                    gridcolor='rgba(200, 200, 200, 0.3)',
-                    title_font=dict(color='#000000', size=12),
-                    tickfont=dict(color='#000000')
-                ),
-                height=400,
-                margin=dict(l=50, r=20, t=20, b=100),
-                plot_bgcolor='white',
-                paper_bgcolor='white',
-                font=dict(color='#000000'),
-                showlegend=False,
-                hovermode='closest'
-            )
-            st.plotly_chart(fig_speech, use_container_width=True)
-            
-            # Descriptive Statistics for Speech Metrics
-            st.markdown("##### Descriptive Statistics")
-            st.caption(f"Statistics for {len(selected_speech_attempt_nums)} selected attempt(s) across all metrics")
-            
-            # Calculate statistics from selected attempts only
-            selected_speech_data = student_soc[student_soc['attempt'].isin(selected_speech_attempt_nums)]
-            all_speech_scores = []
-            for col_name in metric_cols:
-                if col_name in selected_speech_data.columns:
-                    all_speech_scores.extend(selected_speech_data[col_name].dropna().tolist())
-            
-            if all_speech_scores:
-                stats_data_speech = {
-                    "Statistic": ["Mean", "Median", "Min", "Max", "Range", "Std Dev", "Variance"],
-                    "Value": [
-                        f"{np.mean(all_speech_scores):.2f}",
-                        f"{np.median(all_speech_scores):.2f}",
-                        f"{np.min(all_speech_scores):.2f}",
-                        f"{np.max(all_speech_scores):.2f}",
-                        f"{np.max(all_speech_scores) - np.min(all_speech_scores):.2f}",
-                        f"{np.std(all_speech_scores, ddof=1):.2f}" if len(all_speech_scores) > 1 else "N/A",
-                        f"{np.var(all_speech_scores, ddof=1):.2f}" if len(all_speech_scores) > 1 else "N/A"
-                    ]
+            # Check if speech data is available
+            if not student_soc.empty:
+                # Define speech metrics
+                speech_metrics = {
+                    'Volume': 'speech_volume',
+                    'Pace': 'speech_pace',
+                    'Pitch': 'speech_pitch',
+                    'Pauses': 'speech_pauses'
                 }
                 
-                col1, col2 = st.columns(2)
+                # Get metric names and column names
+                metric_names = list(speech_metrics.keys())
+                metric_cols = list(speech_metrics.values())
+                
+                # Sort attempts to ensure proper ordering
+                unique_speech_attempts = sorted(student_soc['attempt'].unique())
+                
+                # Create organized filtering system
+                st.markdown("**Filter attempts to display:**")
+                col1, col2 = st.columns([1, 2])
+                
                 with col1:
-                    st.dataframe(pd.DataFrame(stats_data_speech), hide_index=True, use_container_width=True)
+                    filter_type_speech = st.radio(
+                        "Filter type",
+                        options=["All", "Last 5", "Individual"],
+                        key=f"filter_type_{selected_student}_speech",
+                        label_visibility="collapsed",
+                        horizontal=False
+                    )
                 
                 with col2:
-                    # Summary info
-                    st.markdown("**Summary**")
-                    st.write(f"Selected Attempts: {len(selected_speech_attempt_nums)}")
-                    st.write(f"Metrics Tracked: {len(metric_names)}")
-                    st.write(f"Data Points: {len(all_speech_scores)}")
-                    
-                    # Improvement indicator (only if multiple attempts selected)
-                    if len(selected_speech_attempt_nums) > 1:
-                        sorted_selected_speech = sorted(selected_speech_attempt_nums)
-                        first_attempt_avg = student_soc[student_soc['attempt'] == sorted_selected_speech[0]][metric_cols].mean().mean()
-                        last_attempt_avg = student_soc[student_soc['attempt'] == sorted_selected_speech[-1]][metric_cols].mean().mean()
-                        improvement = last_attempt_avg - first_attempt_avg
-                        
-                        if improvement > 0:
-                            st.success(f"📈 Improvement: +{improvement:.2f} points")
-                        elif improvement < 0:
-                            st.warning(f"📉 Change: {improvement:.2f} points")
-                        else:
-                            st.info(f"➡️ No change: {improvement:.2f} points")
+                    if filter_type_speech == "All":
+                        selected_speech_attempt_nums = unique_speech_attempts
+                        st.info(f"Showing all {len(unique_speech_attempts)} attempts")
+                    elif filter_type_speech == "Last 5":
+                        selected_speech_attempt_nums = unique_speech_attempts[-5:] if len(unique_speech_attempts) >= 5 else unique_speech_attempts
+                        st.info(f"Showing last {len(selected_speech_attempt_nums)} attempt(s): {', '.join(map(str, selected_speech_attempt_nums))}")
+                    else:  # Individual
+                        selected_speech_attempt_nums = st.multiselect(
+                            label="Choose which attempts to display",
+                            options=unique_speech_attempts,
+                            default=unique_speech_attempts,
+                            key=f"attempt_multiselect_{selected_student}_speech",
+                            label_visibility="collapsed",
+                            help="Select one or more attempts to display on the graph"
+                        )
                 
-                st.caption("ℹ️ Speech quality assessed from encounter recording")
+                fig_speech = go.Figure()
+                
+                # Create a line for each selected attempt
+                for idx, attempt_num in enumerate(unique_speech_attempts):
+                    if attempt_num not in selected_speech_attempt_nums:
+                        continue  # Skip unselected attempts
+                        
+                    attempt_speech_data = student_soc[student_soc['attempt'] == attempt_num].iloc[0]
+                    
+                    # Get scores for each metric for this attempt
+                    scores = []
+                    for col_name in metric_cols:
+                        if col_name in attempt_speech_data and pd.notna(attempt_speech_data[col_name]):
+                            scores.append(attempt_speech_data[col_name])
+                        else:
+                            scores.append(0)  # Default to 0 if not available
+                    
+                    # Use modulo to cycle colors if more than 15 attempts
+                    color = attempt_colors[idx % len(attempt_colors)]
+                    
+                    fig_speech.add_trace(go.Scatter(
+                        x=metric_names,
+                        y=scores,
+                        mode='lines+markers',
+                        name=f'Attempt {attempt_num}',
+                        line=dict(color=color, width=2.5),
+                        marker=dict(size=8, symbol='circle', line=dict(width=1, color='white')),
+                        hovertemplate='<b>%{fullData.name}</b><br>%{x}<br>Score: %{y:.2f}<extra></extra>'
+                    ))
+                
+                # Add average reference line showing average for each metric
+                if selected_speech_attempt_nums:
+                    selected_speech_data_for_stats = student_soc[student_soc['attempt'].isin(selected_speech_attempt_nums)]
+                    # Calculate average for each metric across selected attempts
+                    metric_averages = []
+                    for col_name in metric_cols:
+                        if col_name in selected_speech_data_for_stats.columns:
+                            metric_averages.append(selected_speech_data_for_stats[col_name].mean())
+                        else:
+                            metric_averages.append(0)
+                    
+                    if metric_averages:
+                        # Add average line trace
+                        fig_speech.add_trace(go.Scatter(
+                            x=metric_names,
+                            y=metric_averages,
+                            mode='lines',
+                            name='Average',
+                            line=dict(color='black', width=2, dash='dot'),
+                            hovertemplate='<b>Average</b><br>%{x}<br>Score: %{y:.2f}<extra></extra>'
+                        ))
+                
+                fig_speech.update_layout(
+                    xaxis=dict(
+                        title='Speech Quality Metric',
+                        showgrid=True,
+                        gridcolor='rgba(200, 200, 200, 0.3)',
+                        title_font=dict(color='#000000', size=12),
+                        tickfont=dict(color='#000000', size=10)
+                    ),
+                    yaxis=dict(
+                        title='Score (0-10 scale)',
+                        range=[0, 11],
+                        showgrid=True,
+                        gridcolor='rgba(200, 200, 200, 0.3)',
+                        title_font=dict(color='#000000', size=12),
+                        tickfont=dict(color='#000000')
+                    ),
+                    height=400,
+                    margin=dict(l=50, r=20, t=20, b=100),
+                    plot_bgcolor='white',
+                    paper_bgcolor='white',
+                    font=dict(color='#000000'),
+                    showlegend=False,
+                    hovermode='closest'
+                )
+                st.plotly_chart(fig_speech, use_container_width=True)
+                
+                # Descriptive Statistics for Speech Metrics
+                st.markdown("##### Descriptive Statistics")
+                st.caption(f"Statistics for {len(selected_speech_attempt_nums)} selected attempt(s) across all metrics")
+                
+                # Calculate statistics from selected attempts only
+                selected_speech_data = student_soc[student_soc['attempt'].isin(selected_speech_attempt_nums)]
+                all_speech_scores = []
+                for col_name in metric_cols:
+                    if col_name in selected_speech_data.columns:
+                        all_speech_scores.extend(selected_speech_data[col_name].dropna().tolist())
+                
+                if all_speech_scores:
+                    stats_data_speech = {
+                        "Statistic": ["Mean", "Median", "Min", "Max", "Range", "Std Dev", "Variance"],
+                        "Value": [
+                            f"{np.mean(all_speech_scores):.2f}",
+                            f"{np.median(all_speech_scores):.2f}",
+                            f"{np.min(all_speech_scores):.2f}",
+                            f"{np.max(all_speech_scores):.2f}",
+                            f"{np.max(all_speech_scores) - np.min(all_speech_scores):.2f}",
+                            f"{np.std(all_speech_scores, ddof=1):.2f}" if len(all_speech_scores) > 1 else "N/A",
+                            f"{np.var(all_speech_scores, ddof=1):.2f}" if len(all_speech_scores) > 1 else "N/A"
+                        ]
+                    }
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.dataframe(pd.DataFrame(stats_data_speech), hide_index=True, use_container_width=True)
+                    
+                    with col2:
+                        # Summary info
+                        st.markdown("**Summary**")
+                        st.write(f"Selected Attempts: {len(selected_speech_attempt_nums)}")
+                        st.write(f"Metrics Tracked: {len(metric_names)}")
+                        st.write(f"Data Points: {len(all_speech_scores)}")
+                        
+                        # Improvement indicator (only if multiple attempts selected)
+                        if len(selected_speech_attempt_nums) > 1:
+                            sorted_selected_speech = sorted(selected_speech_attempt_nums)
+                            first_attempt_avg = student_soc[student_soc['attempt'] == sorted_selected_speech[0]][metric_cols].mean().mean()
+                            last_attempt_avg = student_soc[student_soc['attempt'] == sorted_selected_speech[-1]][metric_cols].mean().mean()
+                            improvement = last_attempt_avg - first_attempt_avg
+                            
+                            if improvement > 0:
+                                st.success(f"📈 Improvement: +{improvement:.2f} points")
+                            elif improvement < 0:
+                                st.warning(f"📉 Change: {improvement:.2f} points")
+                            else:
+                                st.info(f"➡️ No change: {improvement:.2f} points")
+                    
+                    st.caption("ℹ️ Speech quality assessed from encounter recording")
+                else:
+                    st.info("Please select at least one attempt to view statistics")
             else:
-                st.info("Please select at least one attempt to view statistics")
-        else:
-            st.info("Speech quality data not available for this student/iteration")
+                st.info("Speech quality data not available for this student/iteration")
         
         # AI-Generated Descriptive Feedback Section
         st.markdown("---")
