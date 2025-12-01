@@ -415,7 +415,6 @@ with tab2:
         
         # Performance Visualizations (All Charts)
         st.markdown("---")
-        st.markdown("#### Performance Visualization")
         
         # Load AI feedback context from JSON
         ai_json_data = load_ai_feedback_json()
@@ -435,7 +434,6 @@ with tab2:
         latest_attempt = student_copy.sort_values('attempt', ascending=False).iloc[0]
         
         # Chart Selection Radio Button
-        st.markdown("---")
         st.markdown("#### Performance Visualization")
         chart_selection = st.radio(
             "Select chart to display:",
