@@ -694,7 +694,7 @@ elif admin_section == "User Management":
 elif admin_section == "Analytics":
     st.markdown("### Cross-Instance Analytics")
     
-    tab1, tab2, tab3, tab4 = st.tabs(["Overview", "Performance Comparison", "Usage Statistics", "Correlation Analysis"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Overview", "Performance Comparison", "Usage Statistics", "Correlation Analysis", "Feedback Analysis"])
     
     with tab1:
         st.markdown("#### Analytics Overview")
@@ -988,6 +988,344 @@ elif admin_section == "Analytics":
             )
         else:
             st.warning("Please select two different instances to analyze correlation.")
+    
+    with tab5:
+        st.markdown("#### 📊 Student Feedback Analysis")
+        st.caption("Aggregate view of how students rated the AI-generated feedback quality across all instances")
+        
+        # Instance selection
+        available_instances = [inst['short_name'] for inst in config['instances']]
+        selected_feedback_instance = st.selectbox(
+            "Select Instance",
+            ["All Instances"] + available_instances,
+            help="Choose an instance to view feedback data, or select 'All Instances' for aggregate view"
+        )
+        
+        # Generate mock feedback data (will be replaced with MongoDB queries later)
+        # Creating realistic mock data
+        @st.cache_data
+        def generate_feedback_data():
+            feedback_data = []
+            np.random.seed(42)
+            
+            for inst in config['instances']:
+                n_students = 12
+                # Generate feedback ratings for 70% of students, 60% of attempts
+                for student_idx in range(int(n_students * 0.7)):
+                    for attempt in range(1, 4):  # Mock 3 attempts with feedback
+                        feedback_data.append({
+                            'instance': inst['short_name'],
+                            'student_id': f"S{student_idx+1:02d}",
+                            'attempt': attempt,
+                            'clarity_rating': np.random.choice([3, 4, 5], p=[0.2, 0.4, 0.4]),
+                            'actionability_rating': np.random.choice([2, 3, 4, 5], p=[0.1, 0.3, 0.4, 0.2]),
+                            'detail_rating': np.random.choice([3, 4, 5], p=[0.3, 0.4, 0.3]),
+                            'question_rating': np.random.choice([2, 3, 4, 5], p=[0.15, 0.25, 0.35, 0.25]),
+                            'overall_rating': np.random.choice([3, 4, 5], p=[0.2, 0.5, 0.3])
+                        })
+            
+            return pd.DataFrame(feedback_data)
+        
+        feedback_df = generate_feedback_data()
+        
+        # Filter by instance if specific one selected
+        if selected_feedback_instance != "All Instances":
+            display_feedback_df = feedback_df[feedback_df['instance'] == selected_feedback_instance]
+        else:
+            display_feedback_df = feedback_df
+        
+        if len(display_feedback_df) > 0:
+            # Key metrics row
+            st.markdown("##### Overall Feedback Metrics")
+            metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
+            
+            rating_categories = ['clarity_rating', 'actionability_rating', 'detail_rating', 'question_rating', 'overall_rating']
+            category_labels = {
+                'clarity_rating': '💬 Clarity',
+                'actionability_rating': '🎯 Actionability', 
+                'detail_rating': '📝 Detail',
+                'question_rating': '❓ Question Quality',
+                'overall_rating': '⭐ Overall'
+            }
+            
+            with metric_col1:
+                total_responses = len(display_feedback_df)
+                st.metric("Feedback Responses", total_responses)
+            
+            with metric_col2:
+                avg_overall = display_feedback_df['overall_rating'].mean()
+                st.metric("⭐ Avg Overall Rating", f"{avg_overall:.2f} / 5.0", 
+                         f"{((avg_overall / 5.0) * 100):.0f}% satisfaction")
+            
+            with metric_col3:
+                positive_feedback_pct = (display_feedback_df['overall_rating'] >= 4).mean() * 100
+                st.metric("Positive Feedback", f"{positive_feedback_pct:.1f}%", 
+                         "Ratings ≥ 4/5")
+            
+            with metric_col4:
+                unique_students = display_feedback_df['student_id'].nunique()
+                st.metric("Students Participating", unique_students)
+            
+            st.markdown("---")
+            
+            # Rating distributions
+            st.markdown("##### Rating Distributions by Category")
+            
+            # Calculate average ratings for each category
+            avg_ratings = {cat: display_feedback_df[cat].mean() for cat in rating_categories}
+            
+            # Create columns for rating breakdown
+            rating_cols = st.columns(5)
+            
+            for idx, (cat, label) in enumerate(category_labels.items()):
+                with rating_cols[idx]:
+                    avg_score = avg_ratings[cat]
+                    
+                    # Color based on score
+                    if avg_score >= 4.0:
+                        color = "#27AE60"  # Green
+                    elif avg_score >= 3.0:
+                        color = "#F39C12"  # Orange
+                    else:
+                        color = "#E74C3C"  # Red
+                    
+                    st.markdown(f"""
+                    <div style="
+                        padding: 15px;
+                        border-radius: 10px;
+                        background: linear-gradient(135deg, {color}22 0%, {color}11 100%);
+                        border-left: 4px solid {color};
+                        text-align: center;
+                        margin-bottom: 10px;
+                    ">
+                        <div style="font-size: 14px; color: #7F8C8D; margin-bottom: 5px;">{label}</div>
+                        <div style="font-size: 28px; font-weight: bold; color: {color};">{avg_score:.2f}</div>
+                        <div style="font-size: 12px; color: #95A5A6;">out of 5.0</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # Distribution chart for this category
+                    rating_counts = display_feedback_df[cat].value_counts().sort_index()
+                    
+                    fig_dist = go.Figure(data=[
+                        go.Bar(
+                            x=rating_counts.index,
+                            y=rating_counts.values,
+                            marker=dict(
+                                color=[color if x >= 4 else '#95A5A6' for x in rating_counts.index],
+                                line=dict(color=color, width=2)
+                            ),
+                            text=rating_counts.values,
+                            textposition='auto',
+                            hovertemplate='Rating: %{x}<br>Count: %{y}<extra></extra>'
+                        )
+                    ])
+                    
+                    fig_dist.update_layout(
+                        height=180,
+                        margin=dict(l=10, r=10, t=10, b=30),
+                        xaxis=dict(
+                            title='',
+                            tickmode='linear',
+                            tick0=1,
+                            dtick=1,
+                            range=[0.5, 5.5]
+                        ),
+                        yaxis=dict(title='', showticklabels=False),
+                        showlegend=False,
+                        plot_bgcolor='rgba(0,0,0,0)',
+                        paper_bgcolor='rgba(0,0,0,0)'
+                    )
+                    
+                    st.plotly_chart(fig_dist, use_container_width=True, key=f"admin_fb_dist_{cat}_{selected_feedback_instance}")
+            
+            st.markdown("---")
+            
+            # Trend over time
+            st.markdown("##### Feedback Trends Over Time")
+            st.caption("How student satisfaction evolved across attempts")
+            
+            # Calculate average ratings by attempt
+            feedback_trend = display_feedback_df.groupby('attempt')[rating_categories].mean().reset_index()
+            
+            fig_trend = go.Figure()
+            
+            colors_trend = {
+                'clarity_rating': '#3498DB',
+                'actionability_rating': '#E67E22', 
+                'detail_rating': '#9B59B6',
+                'question_rating': '#1ABC9C',
+                'overall_rating': '#E74C3C'
+            }
+            
+            for cat in rating_categories:
+                fig_trend.add_trace(go.Scatter(
+                    x=feedback_trend['attempt'],
+                    y=feedback_trend[cat],
+                    mode='lines+markers',
+                    name=category_labels[cat],
+                    line=dict(width=3, color=colors_trend[cat]),
+                    marker=dict(size=8)
+                ))
+            
+            fig_trend.update_layout(
+                xaxis_title='Attempt #',
+                yaxis_title='Average Rating (1-5)',
+                height=400,
+                yaxis_range=[0, 5.5],
+                legend=dict(
+                    orientation="h",
+                    yanchor="bottom",
+                    y=1.02,
+                    xanchor="right",
+                    x=1
+                ),
+                hovermode='x unified'
+            )
+            
+            st.plotly_chart(fig_trend, use_container_width=True)
+            
+            st.markdown("---")
+            
+            # Instance comparison (if viewing all instances)
+            if selected_feedback_instance == "All Instances" and len(available_instances) > 1:
+                st.markdown("##### Instance Comparison")
+                st.caption("Comparing feedback ratings across different assessment instances")
+                
+                # Calculate averages per instance
+                instance_avgs = display_feedback_df.groupby('instance')[rating_categories].mean().reset_index()
+                
+                # Create comparison chart
+                fig_instance_compare = go.Figure()
+                
+                categories_short = ['Clarity', 'Actionability', 'Detail', 'Question', 'Overall']
+                
+                for idx, inst_row in instance_avgs.iterrows():
+                    inst_name = inst_row['instance']
+                    fig_instance_compare.add_trace(go.Bar(
+                        name=inst_name,
+                        x=categories_short,
+                        y=[inst_row[cat] for cat in rating_categories],
+                        text=[f"{inst_row[cat]:.2f}" for cat in rating_categories],
+                        textposition='auto',
+                    ))
+                
+                fig_instance_compare.update_layout(
+                    xaxis_title='Rating Category',
+                    yaxis_title='Average Rating (1-5)',
+                    yaxis_range=[0, 5.5],
+                    height=400,
+                    barmode='group',
+                    legend=dict(
+                        orientation="h",
+                        yanchor="bottom",
+                        y=1.02,
+                        xanchor="right",
+                        x=1
+                    )
+                )
+                
+                st.plotly_chart(fig_instance_compare, use_container_width=True)
+                
+                st.markdown("---")
+            
+            # Student-level breakdown
+            st.markdown("##### Student-Level Feedback Breakdown")
+            st.caption("Individual student feedback patterns")
+            
+            # Create student summary table
+            student_summary = display_feedback_df.groupby('student_id').agg({
+                'clarity_rating': 'mean',
+                'actionability_rating': 'mean',
+                'detail_rating': 'mean',
+                'question_rating': 'mean',
+                'overall_rating': 'mean',
+                'attempt': 'count'
+            }).reset_index()
+            student_summary.columns = ['Student ID', 'Clarity', 'Actionability', 'Detail', 'Question Quality', 'Overall', 'Responses']
+            
+            # Sort by overall rating
+            student_summary = student_summary.sort_values('Overall', ascending=False)
+            
+            # Display table with color formatting
+            st.dataframe(
+                student_summary.style.background_gradient(
+                    subset=['Clarity', 'Actionability', 'Detail', 'Question Quality', 'Overall'],
+                    cmap='RdYlGn',
+                    vmin=1,
+                    vmax=5
+                ).format({
+                    'Clarity': '{:.2f}',
+                    'Actionability': '{:.2f}',
+                    'Detail': '{:.2f}',
+                    'Question Quality': '{:.2f}',
+                    'Overall': '{:.2f}',
+                    'Responses': '{:.0f}'
+                }),
+                use_container_width=True,
+                height=400
+            )
+            
+            st.markdown("---")
+            
+            # Top/Bottom performing areas
+            col_insights1, col_insights2 = st.columns(2)
+            
+            with col_insights1:
+                st.markdown("##### 🟢 Strongest Areas")
+                sorted_ratings = sorted(avg_ratings.items(), key=lambda x: x[1], reverse=True)
+                for idx, (cat, score) in enumerate(sorted_ratings[:3]):
+                    label = category_labels[cat].split()[-1]
+                    st.markdown(f"**{idx+1}. {label}**: {score:.2f}/5.0 ({(score/5.0)*100:.0f}%)")
+            
+            with col_insights2:
+                st.markdown("##### 🔴 Areas for Improvement")
+                for idx, (cat, score) in enumerate(sorted_ratings[-3:][::-1]):
+                    label = category_labels[cat].split()[-1]
+                    improvement_needed = 5.0 - score
+                    st.markdown(f"**{idx+1}. {label}**: {score:.2f}/5.0 (↑ {improvement_needed:.2f} to max)")
+            
+            st.markdown("---")
+            
+            # Export functionality
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Export summary statistics
+                summary_export = pd.DataFrame([{
+                    'Instance': selected_feedback_instance,
+                    'Total Responses': total_responses,
+                    'Avg Clarity': avg_ratings['clarity_rating'],
+                    'Avg Actionability': avg_ratings['actionability_rating'],
+                    'Avg Detail': avg_ratings['detail_rating'],
+                    'Avg Question Quality': avg_ratings['question_rating'],
+                    'Avg Overall': avg_ratings['overall_rating'],
+                    'Positive Feedback %': positive_feedback_pct,
+                    'Students': unique_students
+                }])
+                
+                csv_summary = summary_export.to_csv(index=False)
+                st.download_button(
+                    "📊 Download Summary Statistics",
+                    csv_summary,
+                    file_name=f"feedback_summary_{selected_feedback_instance}_{datetime.now().strftime('%Y%m%d')}.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+            
+            with col2:
+                # Export detailed data
+                csv_detailed = display_feedback_df.to_csv(index=False)
+                st.download_button(
+                    "📁 Download Detailed Feedback Data",
+                    csv_detailed,
+                    file_name=f"feedback_detailed_{selected_feedback_instance}_{datetime.now().strftime('%Y%m%d')}.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+        
+        else:
+            st.info("No feedback data available yet. Students will be able to rate feedback quality after completing encounters.")
 
 # Footer
 st.markdown("---")
