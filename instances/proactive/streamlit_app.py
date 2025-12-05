@@ -330,7 +330,7 @@ soc_long, soc_wide = generate_socratic_metrics(students, seed, num_attempts=n_at
 # Tabs for better organization
 tab1, tab2, tab3 = st.tabs(["Data Overview", "Student View", "Faculty View"])
 
-# Tab 1: Data Overview
+# Tab 1: Data Overview (Admin View)
 with tab1:
     st.subheader("Dataset Preview")
     st.dataframe(df.head(20), use_container_width=True)
@@ -2010,7 +2010,7 @@ with tab3:
     st.markdown("---")
     
     # First row: Centrality plots
-    st.markdown("**Centrality Plot**")
+    st.markdown("**Centrality Plot")
     st.caption(f"Identify most influential {aggregate_mode.lower()}s based on co-miss patterns • Metric: {selected_metric}")
     
     # Combine both cohorts for centrality analysis (respecting rubric filters)
