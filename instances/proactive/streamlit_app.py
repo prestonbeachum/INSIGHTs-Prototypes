@@ -437,7 +437,7 @@ with tab2:
         st.markdown("#### Performance Visualization")
         chart_selection = st.radio(
             "Select chart to display:",
-            options=["Encounter Assessment Components", "Socratic Dialogue Components", "Speech Quality Metrics"],
+            options=["Encounter Assessment Components", "Socratic Dialogue Components", "Speech Quality Metrics", "Summary"],
             horizontal=True,
             key=f"chart_type_{selected_student}"
         )
@@ -1046,752 +1046,1024 @@ with tab2:
             else:
                 st.info("Speech quality data not available for this student/iteration")
         
-        # AI-Generated Descriptive Feedback Section
-        st.markdown("---")
-        st.markdown("### AI-Generated Descriptive Feedback")
-        st.caption("Based on performance data from charts above and the Socratic Dialogue Assessment rubric")
-        
-        # Load PDF rubric for reference
-        pdf_rubric = load_pdf_rubric()
-        
-        # Use JSON data if available, otherwise generate dynamically
-        if ai_json_data:
-            ai_context = ai_json_data
-        else:
-            # Fallback: generate AI feedback dynamically
-            try:
-                # Prepare domain scores
-                domain_scores = {}
-                for domain in GROUPS.keys():
-                    domain_scores[domain] = display_df[list(GROUPS[domain])].mean().mean()
+        # ===== SECTION 4: SUMMARY =====
+        elif chart_selection == "Summary":
+            # Custom CSS for enhanced Summary page styling
+            st.markdown("""
+            <style>
+            .summary-header {
+                background: white;
+                padding: 30px;
+                border-radius: 16px;
+                margin-bottom: 30px;
+                text-align: center;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+                border-left: 6px solid #3498DB;
+            }
+            .summary-header h1 {
+                color: #1a1a2e;
+                font-size: 2.5rem;
+                margin: 0;
+                font-weight: 700;
+                letter-spacing: -0.5px;
+            }
+            .summary-header p {
+                color: #666;
+                font-size: 1.1rem;
+                margin-top: 10px;
+            }
+            .score-card {
+                background: white;
+                border-radius: 16px;
+                padding: 24px;
+                text-align: center;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+                border: 1px solid #e8e8e8;
+                transition: transform 0.2s ease, box-shadow 0.2s ease;
+            }
+            .score-card:hover {
+                transform: translateY(-4px);
+                box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+            }
+            .score-icon {
+                font-size: 3rem;
+                margin-bottom: 12px;
+            }
+            .score-value {
+                font-size: 2.8rem;
+                font-weight: 800;
+                margin: 8px 0;
+                letter-spacing: -1px;
+            }
+            .score-label {
+                font-size: 1rem;
+                color: #555;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }
+            .score-badge {
+                display: inline-block;
+                padding: 6px 16px;
+                border-radius: 20px;
+                font-size: 0.85rem;
+                font-weight: 700;
+                margin-top: 12px;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+            .badge-excellent { background: #d4edda; color: #155724; }  /* Advanced - Green */
+            .badge-proficient { background: #d1ecf1; color: #0c5460; }  /* Proficient - Cyan */
+            .badge-developing { background: #ffe4cc; color: #804000; }  /* Emerging - Orange */
+            .badge-needs-work { background: #f8d7da; color: #721c24; }  /* Developing - Red */
+            .section-header {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                margin: 40px 0 20px 0;
+                padding-bottom: 12px;
+                border-bottom: 3px solid #e8e8e8;
+            }
+            .section-icon {
+                font-size: 1.8rem;
+            }
+            .section-title {
+                font-size: 1.5rem;
+                font-weight: 700;
+                color: #1a1a2e;
+                margin: 0;
+            }
+            .stats-table {
+                background: #f8f9fa;
+                border-radius: 12px;
+                overflow: hidden;
+            }
+            .trend-card {
+                background: white;
+                border-radius: 12px;
+                padding: 20px;
+                border-left: 5px solid;
+                box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+            }
+            .trend-up { border-color: #28a745; }
+            .trend-down { border-color: #dc3545; }
+            .trend-neutral { border-color: #6c757d; }
+            .recommendation-card {
+                background: white;
+                border-radius: 12px;
+                padding: 20px;
+                margin-bottom: 16px;
+                box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+                border-left: 5px solid;
+            }
+            .rec-high { border-color: #dc3545; background: white; }
+            .rec-medium { border-color: #ffc107; background: white; }
+            .rec-title {
+                font-size: 1.1rem;
+                font-weight: 700;
+                color: #1a1a2e;
+                margin-bottom: 8px;
+            }
+            .rec-action {
+                color: #555;
+                font-size: 1rem;
+                line-height: 1.6;
+            }
+            .priority-tag {
+                display: inline-block;
+                padding: 4px 10px;
+                border-radius: 12px;
+                font-size: 0.75rem;
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+            .tag-high { background: #dc3545; color: white; }
+            .tag-medium { background: #ffc107; color: #333; }
+            .practice-card {
+                background: white;
+                border-radius: 12px;
+                padding: 20px;
+                margin-bottom: 12px;
+                box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+                border-left: 5px solid;
+            }
+            .practice-title {
+                font-size: 1.1rem;
+                font-weight: 700;
+                margin-bottom: 8px;
+                color: #1a1a2e;
+            }
+            .practice-text {
+                font-size: 0.95rem;
+                line-height: 1.5;
+                color: #555;
+            }
+            .progress-metric {
+                background: white;
+                border-radius: 12px;
+                padding: 20px;
+                text-align: center;
+                box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+            }
+            .progress-value {
+                font-size: 2rem;
+                font-weight: 800;
+                color: #1a1a2e;
+            }
+            .progress-label {
+                font-size: 0.9rem;
+                color: #666;
+                margin-top: 4px;
+            }
+            .domain-pill {
+                display: inline-block;
+                padding: 8px 16px;
+                border-radius: 20px;
+                font-size: 0.9rem;
+                font-weight: 600;
+                margin: 4px;
+            }
+            </style>
+            """, unsafe_allow_html=True)
+            
+            # Main Header
+            st.markdown("""
+            <div class="summary-header">
+                <h1>📊 Performance Summary</h1>
+                <p>Comprehensive overview combining data from all assessment components</p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Calculate all statistics for combined summary
+            all_attempts = sorted(student_soc['attempt'].unique()) if not student_soc.empty else []
+            
+            # Define all component mappings
+            encounter_components = {
+                'Chief Complaint': 'encounter_chief_complaint',
+                'HPI': 'encounter_hpi',
+                'PMH': 'encounter_pmh',
+                'Family/Social History': 'encounter_family_history',
+                'ROS': 'encounter_ros'
+            }
+            
+            socratic_components = {
+                'WONDER': 'socratic_Question_Depth',
+                'REFLECT': 'socratic_Response_Completeness',
+                'REFINE': 'socratic_Assumption_Recognition',
+                'RESTATE': 'socratic_Plan_Flexibility',
+                'REPEAT': 'socratic_In-Encounter_Adjustment'
+            }
+            
+            speech_metrics = {
+                'Volume': 'speech_volume',
+                'Pace': 'speech_pace',
+                'Pitch': 'speech_pitch',
+                'Pauses': 'speech_pauses'
+            }
+            
+            # Calculate scores for each category
+            if not student_soc.empty:
+                # Encounter scores (convert 0/1 to 0-5 scale)
+                encounter_scores = []
+                for col_name in encounter_components.values():
+                    if col_name in student_soc.columns:
+                        encounter_scores.extend((student_soc[col_name].values * 4.5).tolist())
                 
-                # Prepare socratic scores
-                socratic_scores = {}
-                if not student_soc.empty:
-                    soc_row = student_soc.iloc[-1]  # Get latest or aggregate
-                    socratic_scores = {
-                        "Question Depth": float(soc_row['socratic_Question_Depth']),
-                        "Response Completeness": float(soc_row['socratic_Response_Completeness']),
-                        "Assumption Recognition": float(soc_row['socratic_Assumption_Recognition']),
-                        "Plan Flexibility": float(soc_row['socratic_Plan_Flexibility']),
-                        "In-Encounter Adjustment": float(soc_row['socratic_In-Encounter_Adjustment']),
-                    }
+                # Socratic scores (0-5 scale)
+                socratic_scores = []
+                for col_name in socratic_components.values():
+                    if col_name in student_soc.columns:
+                        socratic_scores.extend(student_soc[col_name].dropna().tolist())
                 
-                # Prepare speech scores
-                speech_scores = {}
-                if not student_soc.empty:
-                    soc_row = student_soc.iloc[-1]
-                    speech_scores = {
-                        "volume": float(soc_row['speech_volume']),
-                        "pace": float(soc_row['speech_pace']),
-                        "pitch": float(soc_row['speech_pitch']),
-                        "pauses": float(soc_row['speech_pauses']),
-                    }
+                # Speech scores (0-10 scale)
+                speech_scores = []
+                for col_name in speech_metrics.values():
+                    if col_name in student_soc.columns:
+                        speech_scores.extend(student_soc[col_name].dropna().tolist())
                 
-                # Prepare encounter completeness
-                encounter_completeness = {}
-                if not student_soc.empty:
-                    soc_row = student_soc.iloc[-1]
-                    for elem in ENCOUNTER_ELEMENTS:
-                        encounter_completeness[elem] = int(soc_row[f'encounter_{elem}'])
+                # --- SECTION: Overall Performance Metrics ---
+                st.markdown("""
+                <div class="section-header">
+                    <span class="section-icon">🎯</span>
+                    <h2 class="section-title">Overall Performance Metrics</h2>
+                </div>
+                """, unsafe_allow_html=True)
                 
-                # Get attempt number (ensure it's an integer)
-                if iteration != "All Iterations":
-                    attempt_num = int(iteration)
-                else:
-                    attempt_num = int(display_df['attempt'].max())
+                # Display metrics in 3 columns with enhanced cards
+                col1, col2, col3 = st.columns(3)
                 
-                # Generate AI context
-                ai_context = generate_ai_feedback_context(
-                    student_id=selected_student,
-                    attempt=attempt_num,
-                    domain_scores=domain_scores,
-                    socratic_scores=socratic_scores,
-                    speech_scores=speech_scores,
-                    encounter_completeness=encounter_completeness
-                )
+                with col1:
+                    if encounter_scores:
+                        enc_mean = np.mean(encounter_scores)
+                        enc_std = np.std(encounter_scores, ddof=1) if len(encounter_scores) > 1 else 0
+                        if enc_mean >= 4.1:
+                            badge_class = "badge-excellent"
+                            badge_text = "Advanced"
+                            score_color = "#28a745"  # Green
+                        elif enc_mean >= 3.1:
+                            badge_class = "badge-proficient"
+                            badge_text = "Proficient"
+                            score_color = "#17a2b8"  # Cyan
+                        elif enc_mean >= 2.1:
+                            badge_class = "badge-developing"
+                            badge_text = "Emerging"
+                            score_color = "#ff9800"  # Orange
+                        else:
+                            badge_class = "badge-needs-work"
+                            badge_text = "Developing"
+                            score_color = "#dc3545"  # Red
+                        
+                        st.markdown(f"""
+                        <div class="score-card">
+                            <div class="score-icon">🏥</div>
+                            <div class="score-label">Encounter Assessment</div>
+                            <div class="score-value" style="color: {score_color};">{enc_mean:.1f}<span style="font-size: 1.2rem; color: #888;">/5.0</span></div>
+                            <div style="color: #888; font-size: 0.9rem;">±{enc_std:.2f} std dev</div>
+                            <div class="score-badge {badge_class}">{badge_text}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    else:
+                        st.markdown("""
+                        <div class="score-card">
+                            <div class="score-icon">🏥</div>
+                            <div class="score-label">Encounter Assessment</div>
+                            <div class="score-value" style="color: #888;">N/A</div>
+                        </div>
+                        """, unsafe_allow_html=True)
                 
-                # Enrich with PDF rubric context
-                if pdf_rubric:
-                    ai_context['rubric_reference'] = pdf_rubric
+                with col2:
+                    if socratic_scores:
+                        soc_mean = np.mean(socratic_scores)
+                        soc_std = np.std(socratic_scores, ddof=1) if len(socratic_scores) > 1 else 0
+                        if soc_mean >= 4.1:
+                            badge_class = "badge-excellent"
+                            badge_text = "Advanced"
+                            score_color = "#28a745"  # Green
+                        elif soc_mean >= 3.1:
+                            badge_class = "badge-proficient"
+                            badge_text = "Proficient"
+                            score_color = "#17a2b8"  # Cyan
+                        elif soc_mean >= 2.1:
+                            badge_class = "badge-developing"
+                            badge_text = "Emerging"
+                            score_color = "#ff9800"  # Orange
+                        else:
+                            badge_class = "badge-needs-work"
+                            badge_text = "Developing"
+                            score_color = "#dc3545"  # Red
+                        
+                        st.markdown(f"""
+                        <div class="score-card">
+                            <div class="score-icon">💬</div>
+                            <div class="score-label">Socratic Dialogue</div>
+                            <div class="score-value" style="color: {score_color};">{soc_mean:.1f}<span style="font-size: 1.2rem; color: #888;">/5.0</span></div>
+                            <div style="color: #888; font-size: 0.9rem;">±{soc_std:.2f} std dev</div>
+                            <div class="score-badge {badge_class}">{badge_text}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    else:
+                        st.markdown("""
+                        <div class="score-card">
+                            <div class="score-icon">💬</div>
+                            <div class="score-label">Socratic Dialogue</div>
+                            <div class="score-value" style="color: #888;">N/A</div>
+                        </div>
+                        """, unsafe_allow_html=True)
                 
-            except Exception as e:
-                st.warning(f"⚠️ Could not generate AI feedback: {str(e)}")
-                st.info("💡 **Note:** AI-generated qualitative feedback based on performance data.")
-                ai_context = None
-        
-        if ai_context:
-            # Add info box about rubric integration
-            if pdf_rubric:
-                with st.expander("About This Feedback", expanded=False):
-                    st.info("""
-                    **This feedback integrates:**
-                    - Your quantitative performance data from the charts above
-                    - The comprehensive Socratic Dialogue Assessment rubric with detailed proficiency levels
-                    - Clinical reasoning transparency and shared decision-making frameworks
-                    - Speech quality metrics and communication best practices
-                    """)
-            
-            # Display overall performance summary at top
-            st.markdown("#### Overall Performance")
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                st.metric(
-                    "Domain Performance",
-                    f"{ai_context['descriptive_statistics']['domain_scores']['mean']:.2f}/4.0",
-                    f"±{ai_context['descriptive_statistics']['domain_scores']['std']:.2f}"
-                )
-            
-            with col2:
-                st.metric(
-                    "Socratic Skills",
-                    f"{ai_context['descriptive_statistics']['socratic_scores']['mean']:.2f}/5.0",
-                    f"±{ai_context['descriptive_statistics']['socratic_scores']['std']:.2f}"
-                )
-            
-            with col3:
-                st.metric(
-                    "Speech Quality",
-                    f"{ai_context['descriptive_statistics']['speech_scores']['mean']:.2f}/10.0",
-                    f"±{ai_context['descriptive_statistics']['speech_scores']['std']:.2f}"
-                )
-            
-            st.markdown("---")
-            
-            # Display comprehensive feedback - What student did well
-            if ai_context.get('what_student_did_well'):
-                st.markdown("#### What the Student Did Well")
-                for item in ai_context['what_student_did_well']:
-                    st.markdown(f"**{item['category']}**")
-                    st.write(item['details'])
-                    st.markdown("")  # Add spacing
-            
-            # Display comprehensive feedback - Areas for improvement
-            if ai_context.get('areas_for_improvement'):
-                st.markdown("#### Areas for Growth")
-                for item in ai_context['areas_for_improvement']:
-                    st.markdown(f"**{item['category']}**")
-                    st.write(item['details'])
-                    st.markdown("")  # Add spacing
-            
-            # Add Key Observations section
-            st.markdown("---")
-            st.markdown("#### 🔍 Key Observations")
-            
-            # Determine which data to analyze based on chart selection
-            if chart_selection == "Encounter Assessment Components":
-                # Analyze encounter component trends
-                if not student_soc.empty and len(student_soc) > 1:
-                    encounter_components = {
-                        'Chief Complaint': 'encounter_chief_complaint',
-                        'HPI': 'encounter_hpi',
-                        'PMH': 'encounter_pmh',
-                        'Family/Social History': 'encounter_family_history',
-                        'ROS': 'encounter_ros'
-                    }
+                with col3:
+                    if speech_scores:
+                        speech_mean = np.mean(speech_scores)
+                        speech_std = np.std(speech_scores, ddof=1) if len(speech_scores) > 1 else 0
+                        if speech_mean >= 8.2:
+                            badge_class = "badge-excellent"
+                            badge_text = "Advanced"
+                            score_color = "#28a745"  # Green
+                        elif speech_mean >= 6.2:
+                            badge_class = "badge-proficient"
+                            badge_text = "Proficient"
+                            score_color = "#17a2b8"  # Cyan
+                        elif speech_mean >= 4.2:
+                            badge_class = "badge-developing"
+                            badge_text = "Emerging"
+                            score_color = "#ff9800"  # Orange
+                        else:
+                            badge_class = "badge-needs-work"
+                            badge_text = "Developing"
+                            score_color = "#dc3545"  # Red
+                        
+                        st.markdown(f"""
+                        <div class="score-card">
+                            <div class="score-icon">🎙️</div>
+                            <div class="score-label">Speech Quality</div>
+                            <div class="score-value" style="color: {score_color};">{speech_mean:.1f}<span style="font-size: 1.2rem; color: #888;">/10.0</span></div>
+                            <div style="color: #888; font-size: 0.9rem;">±{speech_std:.2f} std dev</div>
+                            <div class="score-badge {badge_class}">{badge_text}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    else:
+                        st.markdown("""
+                        <div class="score-card">
+                            <div class="score-icon">🎙️</div>
+                            <div class="score-label">Speech Quality</div>
+                            <div class="score-value" style="color: #888;">N/A</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                
+                st.markdown("<br>", unsafe_allow_html=True)
+                
+                # --- SECTION: Detailed Statistics ---
+                st.markdown("""
+                <div class="section-header">
+                    <span class="section-icon">📈</span>
+                    <h2 class="section-title">Detailed Statistics</h2>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # Build combined statistics table with better styling
+                stats_rows = []
+                
+                if encounter_scores:
+                    stats_rows.append({
+                        "📊 Category": "🏥 Encounter Assessment",
+                        "Mean": f"{np.mean(encounter_scores):.2f}",
+                        "Median": f"{np.median(encounter_scores):.2f}",
+                        "Min": f"{np.min(encounter_scores):.2f}",
+                        "Max": f"{np.max(encounter_scores):.2f}",
+                        "Std Dev": f"{np.std(encounter_scores, ddof=1):.2f}" if len(encounter_scores) > 1 else "N/A",
+                        "Scale": "0-5.0"
+                    })
+                
+                if socratic_scores:
+                    stats_rows.append({
+                        "📊 Category": "💬 Socratic Dialogue",
+                        "Mean": f"{np.mean(socratic_scores):.2f}",
+                        "Median": f"{np.median(socratic_scores):.2f}",
+                        "Min": f"{np.min(socratic_scores):.2f}",
+                        "Max": f"{np.max(socratic_scores):.2f}",
+                        "Std Dev": f"{np.std(socratic_scores, ddof=1):.2f}" if len(socratic_scores) > 1 else "N/A",
+                        "Scale": "0-5.0"
+                    })
+                
+                if speech_scores:
+                    stats_rows.append({
+                        "📊 Category": "🎙️ Speech Quality",
+                        "Mean": f"{np.mean(speech_scores):.2f}",
+                        "Median": f"{np.median(speech_scores):.2f}",
+                        "Min": f"{np.min(speech_scores):.2f}",
+                        "Max": f"{np.max(speech_scores):.2f}",
+                        "Std Dev": f"{np.std(speech_scores, ddof=1):.2f}" if len(speech_scores) > 1 else "N/A",
+                        "Scale": "0-10.0"
+                    })
+                
+                if stats_rows:
+                    st.dataframe(pd.DataFrame(stats_rows), hide_index=True, use_container_width=True)
+                
+                # Summary counts in styled boxes
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.markdown(f"""
+                    <div class="progress-metric">
+                        <div class="progress-value">{len(all_attempts)}</div>
+                        <div class="progress-label">Total Attempts</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                with col2:
+                    total_data_points = len(encounter_scores) + len(socratic_scores) + len(speech_scores)
+                    st.markdown(f"""
+                    <div class="progress-metric">
+                        <div class="progress-value">{total_data_points}</div>
+                        <div class="progress-label">Data Points</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                with col3:
+                    total_metrics = len(encounter_components) + len(socratic_components) + len(speech_metrics)
+                    st.markdown(f"""
+                    <div class="progress-metric">
+                        <div class="progress-value">{total_metrics}</div>
+                        <div class="progress-label">Metrics Tracked</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                st.markdown("<br>", unsafe_allow_html=True)
+                
+                # --- SECTION: AI-Generated Feedback Summary ---
+                st.markdown("""
+                <div class="section-header">
+                    <span class="section-icon">🤖</span>
+                    <h2 class="section-title">AI-Generated Feedback Summary</h2>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # Generate comprehensive feedback based on all data
+                if ai_json_data:
+                    # Display domain performance from JSON
+                    if 'domain_performance' in ai_json_data:
+                        st.markdown("**🎓 Domain Performance Levels**")
+                        domain_cols = st.columns(len(ai_json_data['domain_performance']))
+                        for idx, (domain, perf) in enumerate(ai_json_data['domain_performance'].items()):
+                            with domain_cols[idx]:
+                                level = perf.get('level', 'N/A')
+                                score = perf.get('score', 'N/A')
+                                
+                                # Determine badge class and colors based on level
+                                if level == 'Advanced':
+                                    badge_class = "badge-excellent"
+                                    score_color = "#28a745"  # Green
+                                elif level == 'Proficient':
+                                    badge_class = "badge-proficient"
+                                    score_color = "#17a2b8"  # Cyan
+                                elif level == 'Emerging':
+                                    badge_class = "badge-developing"
+                                    score_color = "#ff9800"  # Orange
+                                elif level == 'Developing':
+                                    badge_class = "badge-needs-work"
+                                    score_color = "#dc3545"  # Red
+                                # Legacy mappings for backwards compatibility
+                                elif level == 'Excellent':
+                                    badge_class = "badge-excellent"
+                                    score_color = "#28a745"
+                                elif level == 'Beginning':
+                                    badge_class = "badge-needs-work"
+                                    score_color = "#dc3545"
+                                else:
+                                    badge_class = ""
+                                    score_color = "#888"
+                                
+                                st.markdown(f"""
+                                <div class="score-card">
+                                    <div class="score-label">{domain}</div>
+                                    <div class="score-value" style="color: {score_color}; font-size: 2rem;">{level}</div>
+                                    <div style="color: #888; font-size: 0.9rem; margin-top: 8px;">Score: {score}</div>
+                                    <div class="score-badge {badge_class}">{level}</div>
+                                </div>
+                                """, unsafe_allow_html=True)
                     
+                    # Display growth areas
+                    if ai_json_data.get('growth_areas'):
+                        st.markdown("<br>", unsafe_allow_html=True)
+                        st.markdown("**🌱 Priority Growth Areas**")
+                        for area in ai_json_data['growth_areas']:
+                            st.warning(f"**{area.get('domain', 'Unknown')}** (Score: {area.get('score', 'N/A')}): {area.get('note', '')}")
+                    
+                    # Display patterns
+                    if ai_json_data.get('patterns'):
+                        st.markdown("<br>", unsafe_allow_html=True)
+                        st.markdown("**🔍 Observed Patterns**")
+                        for pattern in ai_json_data['patterns']:
+                            st.info(f"*{pattern.get('type', '').title()}:* {pattern.get('observation', '')}")
+                else:
+                    st.info("💡 **AI feedback will be generated** based on your performance data across all assessment categories.")
+                
+                st.markdown("<br>", unsafe_allow_html=True)
+                
+                # --- SECTION: Key Observations ---
+                st.markdown("""
+                <div class="section-header">
+                    <span class="section-icon">🔍</span>
+                    <h2 class="section-title">Key Observations Across All Categories</h2>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                if len(student_soc) > 1:
                     first_attempt = student_soc.iloc[0]
                     latest_attempt = student_soc.iloc[-1]
                     
-                    improving_components = []
-                    declining_components = []
+                    # Collect all improving and declining components
+                    all_improving = []
+                    all_declining = []
                     
+                    # Encounter components
                     for comp_name, comp_col in encounter_components.items():
                         if comp_col in student_soc.columns:
-                            # Convert binary to 0-5 scale
                             first_score = first_attempt[comp_col] * 4.5
                             latest_score = latest_attempt[comp_col] * 4.5
                             change = latest_score - first_score
-                            
+                            change_pct = (change / 5.0) * 100  # Convert to percentage of max score
                             if change > 0:
-                                improving_components.append((comp_name, change, latest_score))
+                                all_improving.append((f"Encounter: {comp_name}", change_pct))
                             elif change < 0:
-                                declining_components.append((comp_name, abs(change), latest_score))
+                                all_declining.append((f"Encounter: {comp_name}", abs(change_pct)))
                     
-                    if improving_components:
-                        st.markdown("##### 📈 Trending Upward")
-                        for comp_name, change, current_score in improving_components:
-                            percentage = (change / 4.5) * 100
-                            col1, col2, col3 = st.columns([3, 1, 1])
-                            with col1:
-                                st.markdown(f"**{comp_name}**")
-                            with col2:
-                                st.success(f"+{change:.1f} pts")
-                            with col3:
-                                st.info(f"{percentage:.0f}% ⬆️")
-                    
-                    if declining_components:
-                        st.markdown("##### ⚠️ Needs Attention")
-                        for comp_name, change, current_score in declining_components:
-                            percentage = (change / 4.5) * 100
-                            col1, col2, col3 = st.columns([3, 1, 1])
-                            with col1:
-                                st.markdown(f"**{comp_name}**")
-                            with col2:
-                                st.warning(f"-{change:.1f} pts")
-                            with col3:
-                                st.error(f"{percentage:.0f}% ⬇️")
-                    
-                    # Progress indicator
-                    attempts_count = len(student_soc)
-                    if attempts_count >= 3:
-                        component_cols = list(encounter_components.values())
-                        recent_scores = []
-                        overall_scores = []
-                        
-                        for col_name in component_cols:
-                            if col_name in student_soc.columns:
-                                recent_scores.extend((student_soc.tail(3)[col_name].values * 4.5).tolist())
-                                overall_scores.extend((student_soc[col_name].values * 4.5).tolist())
-                        
-                        recent_avg = np.mean(recent_scores)
-                        overall_avg = np.mean(overall_scores)
-                        improvement_pct = ((recent_avg - overall_avg) / overall_avg) * 100 if overall_avg > 0 else 0
-                        
-                        st.markdown("##### 📊 Recent Performance Trend")
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.metric("Last 3 Attempts Average", f"{recent_avg:.2f}/5.0", f"{recent_avg - overall_avg:+.2f}")
-                        with col2:
-                            if recent_avg > overall_avg:
-                                st.success(f"**{improvement_pct:.1f}% above** your overall average of {overall_avg:.2f} 🎯")
-                            elif recent_avg < overall_avg:
-                                st.warning(f"**{abs(improvement_pct):.1f}% below** your overall average of {overall_avg:.2f}")
-                            else:
-                                st.info(f"**Consistent** with your overall average of {overall_avg:.2f}")
-            
-            elif chart_selection == "Socratic Dialogue Components":
-                # Analyze socratic trends
-                if not student_soc.empty and len(student_soc) > 1:
-                    socratic_components = {
-                        'Question Depth': 'socratic_Question_Depth',
-                        'Response Completeness': 'socratic_Response_Completeness',
-                        'Assumption Recognition': 'socratic_Assumption_Recognition',
-                        'Plan Flexibility': 'socratic_Plan_Flexibility',
-                        'In-Encounter Adjustment': 'socratic_In-Encounter_Adjustment'
-                    }
-                    
-                    first_attempt = student_soc.iloc[0]
-                    latest_attempt = student_soc.iloc[-1]
-                    
-                    improving_components = []
-                    declining_components = []
-                    
+                    # Socratic components
                     for comp_name, comp_col in socratic_components.items():
                         if comp_col in student_soc.columns:
                             first_score = first_attempt[comp_col]
                             latest_score = latest_attempt[comp_col]
                             change = latest_score - first_score
-                            
+                            change_pct = (change / 5.0) * 100  # Convert to percentage of max score
                             if change > 0.3:
-                                improving_components.append((comp_name, change, latest_score))
+                                all_improving.append((f"Socratic: {comp_name}", change_pct))
                             elif change < -0.3:
-                                declining_components.append((comp_name, abs(change), latest_score))
+                                all_declining.append((f"Socratic: {comp_name}", abs(change_pct)))
                     
-                    if improving_components:
-                        st.markdown("##### 📈 Trending Upward")
-                        for comp_name, change, current_score in improving_components:
-                            percentage = (change / 5.0) * 100
-                            col1, col2, col3 = st.columns([3, 1, 1])
-                            with col1:
-                                st.markdown(f"**{comp_name}**")
-                            with col2:
-                                st.success(f"+{change:.1f} pts")
-                            with col3:
-                                st.info(f"{percentage:.0f}% ⬆️")
-                    
-                    if declining_components:
-                        st.markdown("##### ⚠️ Needs Attention")
-                        for comp_name, change, current_score in declining_components:
-                            percentage = (change / 5.0) * 100
-                            col1, col2, col3 = st.columns([3, 1, 1])
-                            with col1:
-                                st.markdown(f"**{comp_name}**")
-                            with col2:
-                                st.warning(f"-{change:.1f} pts")
-                            with col3:
-                                st.error(f"{percentage:.0f}% ⬇️")
-                    
-                    # Progress indicator
-                    attempts_count = len(student_soc)
-                    if attempts_count >= 3:
-                        component_cols = list(socratic_components.values())
-                        recent_scores = []
-                        overall_scores = []
-                        
-                        for col_name in component_cols:
-                            if col_name in student_soc.columns:
-                                recent_scores.extend(student_soc.tail(3)[col_name].tolist())
-                                overall_scores.extend(student_soc[col_name].tolist())
-                        
-                        recent_avg = np.mean(recent_scores)
-                        overall_avg = np.mean(overall_scores)
-                        improvement_pct = ((recent_avg - overall_avg) / overall_avg) * 100 if overall_avg > 0 else 0
-                        
-                        st.markdown("##### 📊 Recent Performance Trend")
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.metric("Last 3 Attempts Average", f"{recent_avg:.2f}/5.0", f"{recent_avg - overall_avg:+.2f}")
-                        with col2:
-                            if recent_avg > overall_avg:
-                                st.success(f"**{improvement_pct:.1f}% above** your overall average of {overall_avg:.2f} 🎯")
-                            elif recent_avg < overall_avg:
-                                st.warning(f"**{abs(improvement_pct):.1f}% below** your overall average of {overall_avg:.2f}")
-                            else:
-                                st.info(f"**Consistent** with your overall average of {overall_avg:.2f}")
-            
-            elif chart_selection == "Speech Quality Metrics":
-                # Analyze speech trends
-                if not student_soc.empty and len(student_soc) > 1:
-                    speech_components = {
-                        'Volume': 'speech_volume',
-                        'Pace': 'speech_pace',
-                        'Pitch': 'speech_pitch',
-                        'Pauses': 'speech_pauses'
-                    }
-                    
-                    first_attempt = student_soc.iloc[0]
-                    latest_attempt = student_soc.iloc[-1]
-                    
-                    improving_components = []
-                    declining_components = []
-                    
-                    for comp_name, comp_col in speech_components.items():
+                    # Speech components
+                    for comp_name, comp_col in speech_metrics.items():
                         if comp_col in student_soc.columns:
                             first_score = first_attempt[comp_col]
                             latest_score = latest_attempt[comp_col]
                             change = latest_score - first_score
-                            
+                            change_pct = (change / 10.0) * 100  # Convert to percentage of max score
                             if change > 0.5:
-                                improving_components.append((comp_name, change, latest_score))
+                                all_improving.append((f"Speech: {comp_name}", change_pct))
                             elif change < -0.5:
-                                declining_components.append((comp_name, abs(change), latest_score))
+                                all_declining.append((f"Speech: {comp_name}", abs(change_pct)))
                     
-                    if improving_components:
-                        st.markdown("##### 📈 Trending Upward")
-                        for comp_name, change, current_score in improving_components:
-                            percentage = (change / 10.0) * 100
-                            col1, col2, col3 = st.columns([3, 1, 1])
-                            with col1:
-                                st.markdown(f"**{comp_name}**")
-                            with col2:
-                                st.success(f"+{change:.1f} pts")
-                            with col3:
-                                st.info(f"{percentage:.0f}% ⬆️")
+                    col1, col2 = st.columns(2)
                     
-                    if declining_components:
-                        st.markdown("##### ⚠️ Needs Attention")
-                        for comp_name, change, current_score in declining_components:
-                            percentage = (change / 10.0) * 100
-                            col1, col2, col3 = st.columns([3, 1, 1])
-                            with col1:
-                                st.markdown(f"**{comp_name}**")
-                            with col2:
-                                st.warning(f"-{change:.1f} pts")
-                            with col3:
-                                st.error(f"{percentage:.0f}% ⬇️")
+                    with col1:
+                        st.markdown("""
+                        <div class="trend-card trend-up">
+                            <h4 style="color: #28a745; margin: 0 0 12px 0;">📈 Trending Upward</h4>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        if all_improving:
+                            for comp_name, change_pct in all_improving:
+                                st.markdown(f"""
+                                <div style="background: #d4edda; padding: 10px 16px; border-radius: 8px; margin: 8px 0; display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="font-weight: 600; color: #155724;">✓ {comp_name}</span>
+                                    <span style="background: #28a745; color: white; padding: 4px 12px; border-radius: 12px; font-weight: 700;">+{change_pct:.1f}%</span>
+                                </div>
+                                """, unsafe_allow_html=True)
+                        else:
+                            st.info("No significant improvements detected yet.")
                     
-                    # Progress indicator
-                    attempts_count = len(student_soc)
-                    if attempts_count >= 3:
-                        component_cols = list(speech_components.values())
-                        recent_scores = []
-                        overall_scores = []
-                        
-                        for col_name in component_cols:
-                            if col_name in student_soc.columns:
-                                recent_scores.extend(student_soc.tail(3)[col_name].tolist())
-                                overall_scores.extend(student_soc[col_name].tolist())
-                        
-                        recent_avg = np.mean(recent_scores)
-                        overall_avg = np.mean(overall_scores)
-                        improvement_pct = ((recent_avg - overall_avg) / overall_avg) * 100 if overall_avg > 0 else 0
-                        
-                        st.markdown("##### 📊 Recent Performance Trend")
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.metric("Last 3 Attempts Average", f"{recent_avg:.2f}/10.0", f"{recent_avg - overall_avg:+.2f}")
-                        with col2:
-                            if recent_avg > overall_avg:
-                                st.success(f"**{improvement_pct:.1f}% above** your overall average of {overall_avg:.2f} 🎯")
-                            elif recent_avg < overall_avg:
-                                st.warning(f"**{abs(improvement_pct):.1f}% below** your overall average of {overall_avg:.2f}")
-                            else:
-                                st.info(f"**Consistent** with your overall average of {overall_avg:.2f}")
-            
-            # Add Actionable Recommendations section
-            st.markdown("---")
-            st.markdown("#### 💡 Actionable Recommendations")
-            
-            # Generate recommendations based on the selected chart type and scores
-            recommendations = []
-            
-            if chart_selection == "Encounter Assessment Components":
-                # Recommendations based on encounter components
-                if not student_soc.empty:
-                    latest_soc = student_soc.iloc[-1]
-                    encounter_components = {
-                        'Chief Complaint': ('encounter_chief_complaint', 'Focus on efficiently gathering the primary concern. Ask: "What brings you in today?" and clarify the main issue.'),
-                        'HPI': ('encounter_hpi', 'Use the OLDCARTS mnemonic (Onset, Location, Duration, Character, Aggravating/Alleviating, Radiation, Timing, Severity) to gather complete history.'),
-                        'PMH': ('encounter_pmh', 'Always ask about chronic conditions, previous surgeries, and hospitalizations. This context is critical for diagnosis.'),
-                        'Family/Social History': ('encounter_family_history', 'Explore family medical history for hereditary conditions and social factors (smoking, alcohol, living situation) that impact health.'),
-                        'ROS': ('encounter_ros', 'Conduct systematic review of systems. Cover all major systems even if briefly to catch important missed symptoms.')
-                    }
+                    with col2:
+                        st.markdown("""
+                        <div class="trend-card trend-down">
+                            <h4 style="color: #dc3545; margin: 0 0 12px 0;">⚠️ Needs Attention</h4>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        if all_declining:
+                            for comp_name, change_pct in all_declining:
+                                st.markdown(f"""
+                                <div style="background: #f8d7da; padding: 10px 16px; border-radius: 8px; margin: 8px 0; display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="font-weight: 600; color: #721c24;">⚠ {comp_name}</span>
+                                    <span style="background: #dc3545; color: white; padding: 4px 12px; border-radius: 12px; font-weight: 700;">-{change_pct:.1f}%</span>
+                                </div>
+                                """, unsafe_allow_html=True)
+                        else:
+                            st.success("No areas showing decline!")
                     
-                    for comp_name, (comp_col, advice) in encounter_components.items():
+                    # Overall progress summary
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    st.markdown("**📊 Overall Progress**")
+                    
+                    # Calculate overall improvement
+                    total_first = []
+                    total_latest = []
+                    
+                    # Normalize all scores to 0-1 scale for comparison
+                    for comp_col in encounter_components.values():
                         if comp_col in student_soc.columns:
-                            score = latest_soc[comp_col] * 4.5  # Convert to 0-5 scale
-                            if score < 3.5:
-                                recommendations.append({
-                                    'focus': comp_name,
-                                    'emoji': '🎯',
-                                    'action': advice,
-                                    'priority': 'High' if score < 2.0 else 'Medium'
-                                })
-            
-            elif chart_selection == "Socratic Dialogue Components":
-                # Recommendations based on socratic components
+                            total_first.append(first_attempt[comp_col] * 4.5 / 5.0)
+                            total_latest.append(latest_attempt[comp_col] * 4.5 / 5.0)
+                    
+                    for comp_col in socratic_components.values():
+                        if comp_col in student_soc.columns:
+                            total_first.append(first_attempt[comp_col] / 5.0)
+                            total_latest.append(latest_attempt[comp_col] / 5.0)
+                    
+                    for comp_col in speech_metrics.values():
+                        if comp_col in student_soc.columns:
+                            total_first.append(first_attempt[comp_col] / 10.0)
+                            total_latest.append(latest_attempt[comp_col] / 10.0)
+                    
+                    if total_first and total_latest:
+                        overall_first = np.mean(total_first) * 100
+                        overall_latest = np.mean(total_latest) * 100
+                        overall_change = overall_latest - overall_first
+                        
+                        prog_col1, prog_col2, prog_col3 = st.columns(3)
+                        with prog_col1:
+                            st.markdown(f"""
+                            <div class="progress-metric">
+                                <div class="progress-value" style="color: #6c757d;">{overall_first:.1f}%</div>
+                                <div class="progress-label">First Attempt</div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        with prog_col2:
+                            st.markdown(f"""
+                            <div class="progress-metric">
+                                <div class="progress-value" style="color: #007bff;">{overall_latest:.1f}%</div>
+                                <div class="progress-label">Latest Attempt</div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        with prog_col3:
+                            change_color = "#28a745" if overall_change > 0 else "#dc3545" if overall_change < 0 else "#6c757d"
+                            change_sign = "+" if overall_change > 0 else ""
+                            st.markdown(f"""
+                            <div class="progress-metric">
+                                <div class="progress-value" style="color: {change_color};">{change_sign}{overall_change:.1f}%</div>
+                                <div class="progress-label">Overall Change</div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                else:
+                    st.info("📌 Complete more attempts to see trend analysis across all categories.")
+                
+                st.markdown("<br>", unsafe_allow_html=True)
+                
+                # --- SECTION: Actionable Recommendations ---
+                st.markdown("""
+                <div class="section-header">
+                    <span class="section-icon">💡</span>
+                    <h2 class="section-title">Actionable Recommendations</h2>
+                </div>
+                """, unsafe_allow_html=True)
+                st.caption("Prioritized recommendations based on all performance data")
+                
+                all_recommendations = []
+                
                 if not student_soc.empty:
                     latest_soc = student_soc.iloc[-1]
                     
-                    socratic_recommendations = {
-                        'socratic_Question_Depth': {
-                            'name': 'Question Depth',
-                            'emoji': '🔍',
-                            'action': 'Practice asking follow-up questions that explore patient concerns and beliefs. Move beyond fact-gathering to understanding.',
-                            'tip': 'Try: "What worries you most about this?" or "How does this affect your daily life?"'
-                        },
-                        'socratic_Response_Completeness': {
-                            'name': 'Response Completeness',
-                            'emoji': '👂',
-                            'action': 'Work on active listening - pause after patient responses and acknowledge what you heard before moving to the next question.',
-                            'tip': 'Use reflective statements: "It sounds like..." or "What I\'m hearing is..."'
-                        },
-                        'socratic_Assumption_Recognition': {
-                            'name': 'Assumption Recognition',
-                            'emoji': '🤔',
-                            'action': 'Identify and verbalize your clinical assumptions. Question whether your initial thoughts might be biased or incomplete.',
-                            'tip': 'Practice transparency: "I\'m assuming... but let me check..." or "What am I missing here?"'
-                        },
-                        'socratic_Plan_Flexibility': {
-                            'name': 'Plan Flexibility',
-                            'emoji': '🔄',
-                            'action': 'Include the patient in decision-making. Use collaborative language and acknowledge their expertise about their own body.',
-                            'tip': 'Try phrases like: "What do you think about..." or "Does this plan work for you?"'
-                        },
-                        'socratic_In-Encounter_Adjustment': {
-                            'name': 'In-Encounter Adjustment',
-                            'emoji': '⚡',
-                            'action': 'Adjust your approach in real-time when you notice communication gaps or patient confusion. Be responsive to feedback.',
-                            'tip': 'Watch for cues: "I see you\'re confused, let me explain differently..." or "You seem concerned, what\'s on your mind?"'
-                        }
+                    # Encounter recommendations
+                    encounter_recs = {
+                        'encounter_chief_complaint': ('Chief Complaint', '🎯', 'Focus on efficiently gathering the primary concern. Ask: "What brings you in today?"'),
+                        'encounter_hpi': ('HPI', '📋', 'Use the OLDCARTS mnemonic for complete history gathering.'),
+                        'encounter_pmh': ('PMH', '📁', 'Always ask about chronic conditions, previous surgeries, and hospitalizations.'),
+                        'encounter_family_history': ('Family/Social History', '👨‍👩‍👧', 'Explore family medical history and social factors that impact health.'),
+                        'encounter_ros': ('ROS', '🔍', 'Conduct systematic review of systems to catch important missed symptoms.')
                     }
                     
-                    for col_name, rec_data in socratic_recommendations.items():
+                    for col_name, (name, emoji, advice) in encounter_recs.items():
+                        if col_name in student_soc.columns:
+                            score = latest_soc[col_name] * 4.5
+                            if score < 3.5:
+                                all_recommendations.append({
+                                    'category': 'Encounter',
+                                    'focus': name,
+                                    'emoji': emoji,
+                                    'action': advice,
+                                    'priority': 'High' if score < 2.0 else 'Medium',
+                                    'score': score
+                                })
+                    
+                    # Socratic recommendations
+                    socratic_recs = {
+                        'socratic_Question_Depth': ('Question Depth', '❓', 'Practice asking follow-up questions that explore patient concerns and beliefs.'),
+                        'socratic_Response_Completeness': ('Response Completeness', '👂', 'Work on active listening - pause after responses and acknowledge what you heard.'),
+                        'socratic_Assumption_Recognition': ('Assumption Recognition', '🤔', 'Identify and verbalize your clinical assumptions.'),
+                        'socratic_Plan_Flexibility': ('Plan Flexibility', '🔄', 'Include the patient in decision-making using collaborative language.'),
+                        'socratic_In-Encounter_Adjustment': ('In-Encounter Adjustment', '⚡', 'Adjust your approach in real-time when you notice communication gaps.')
+                    }
+                    
+                    for col_name, (name, emoji, advice) in socratic_recs.items():
                         if col_name in student_soc.columns:
                             score = latest_soc[col_name]
                             if score < 3.5:
-                                recommendations.append({
-                                    'focus': rec_data['name'],
-                                    'emoji': rec_data['emoji'],
-                                    'action': rec_data['action'],
-                                    'tip': rec_data['tip'],
-                                    'priority': 'High' if score < 2.5 else 'Medium'
+                                all_recommendations.append({
+                                    'category': 'Socratic',
+                                    'focus': name,
+                                    'emoji': emoji,
+                                    'action': advice,
+                                    'priority': 'High' if score < 2.5 else 'Medium',
+                                    'score': score
                                 })
-            
-            elif chart_selection == "Speech Quality Metrics":
-                # Recommendations based on speech metrics
+                    
+                    # Speech recommendations
+                    if 'speech_volume' in student_soc.columns and latest_soc['speech_volume'] < 6.0:
+                        all_recommendations.append({
+                            'category': 'Speech',
+                            'focus': 'Volume',
+                            'emoji': '🔊',
+                            'action': 'Speak louder and project your voice with confidence.',
+                            'priority': 'High' if latest_soc['speech_volume'] < 4.0 else 'Medium',
+                            'score': latest_soc['speech_volume']
+                        })
+                    
+                    if 'speech_pace' in student_soc.columns and (latest_soc['speech_pace'] < 6.0 or latest_soc['speech_pace'] > 9.0):
+                        if latest_soc['speech_pace'] > 9.0:
+                            all_recommendations.append({
+                                'category': 'Speech',
+                                'focus': 'Pace',
+                                'emoji': '⏸️',
+                                'action': 'Slow down slightly. Patients need time to process medical information.',
+                                'priority': 'Medium',
+                                'score': latest_soc['speech_pace']
+                            })
+                        else:
+                            all_recommendations.append({
+                                'category': 'Speech',
+                                'focus': 'Pace',
+                                'emoji': '⏩',
+                                'action': 'Practice maintaining conversational flow while allowing patient processing time.',
+                                'priority': 'Medium',
+                                'score': latest_soc['speech_pace']
+                            })
+                    
+                    if 'speech_pauses' in student_soc.columns and latest_soc['speech_pauses'] < 6.0:
+                        all_recommendations.append({
+                            'category': 'Speech',
+                            'focus': 'Pauses',
+                            'emoji': '⏯️',
+                            'action': 'Incorporate more meaningful pauses after asking important questions.',
+                            'priority': 'High' if latest_soc['speech_pauses'] < 4.0 else 'Medium',
+                            'score': latest_soc['speech_pauses']
+                        })
+                
+                # Sort by priority and display recommendations
+                high_priority = [r for r in all_recommendations if r.get('priority') == 'High']
+                medium_priority = [r for r in all_recommendations if r.get('priority') == 'Medium']
+                sorted_recs = high_priority + medium_priority
+                
+                if sorted_recs:
+                    for rec in sorted_recs[:5]:  # Show top 5 recommendations
+                        priority_class = "rec-high" if rec['priority'] == 'High' else "rec-medium"
+                        tag_class = "tag-high" if rec['priority'] == 'High' else "tag-medium"
+                        st.markdown(f"""
+                        <div class="recommendation-card {priority_class}">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                                <span class="rec-title">{rec['emoji']} {rec['focus']}</span>
+                                <span class="priority-tag {tag_class}">{rec['priority']} Priority</span>
+                            </div>
+                            <div class="rec-action">→ {rec['action']}</div>
+                            <div style="margin-top: 8px; color: #888; font-size: 0.85rem;">Category: {rec['category']} Assessment</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    st.markdown("""
+                    <div style="background: white; padding: 24px; border-radius: 12px; text-align: center; box-shadow: 0 2px 12px rgba(0,0,0,0.06); border-left: 5px solid #28a745;">
+                        <div style="font-size: 2.5rem; margin-bottom: 12px;">🎉</div>
+                        <div style="font-size: 1.3rem; font-weight: 700; color: #1a1a2e; margin-bottom: 8px;">Excellent Performance!</div>
+                        <div style="color: #555;">Continue practicing to maintain proficiency across all categories.</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                st.markdown("<br>", unsafe_allow_html=True)
+                
+                # --- SECTION: Practice Suggestions ---
+                st.markdown("""
+                <div class="section-header">
+                    <span class="section-icon">📚</span>
+                    <h2 class="section-title">Practice Suggestions</h2>
+                </div>
+                """, unsafe_allow_html=True)
+                st.caption("Targeted practice activities based on areas needing improvement")
+                
+                all_practice_tips = []
+                
                 if not student_soc.empty:
                     latest_soc = student_soc.iloc[-1]
                     
-                    # Volume recommendations
-                    if 'speech_volume' in student_soc.columns:
-                        volume = latest_soc['speech_volume']
-                        if volume < 6.0:
-                            recommendations.append({
-                                'focus': 'Volume',
-                                'emoji': '🔊',
-                                'action': 'Speak louder and project your voice. Low volume can make patients feel you\'re uncertain or disengaged.',
-                                'tip': 'Practice speaking from your diaphragm. Record yourself to check volume consistency.',
-                                'priority': 'High' if volume < 4.0 else 'Medium'
-                            })
-                        elif volume > 8.5:
-                            recommendations.append({
-                                'focus': 'Volume',
-                                'emoji': '🔉',
-                                'action': 'Moderate your volume. Very loud speech can overwhelm patients or seem aggressive.',
-                                'tip': 'Be aware of room size and patient comfort. Match volume to the setting.',
-                                'priority': 'Medium'
-                            })
-                    
-                    # Pace recommendations
-                    if 'speech_pace' in student_soc.columns:
-                        pace = latest_soc['speech_pace']
-                        if pace < 6.0:
-                            recommendations.append({
-                                'focus': 'Speaking Pace',
-                                'emoji': '⏩',
-                                'action': 'Your pace may be too slow. Practice maintaining conversational flow while still allowing patient processing time.',
-                                'tip': 'Vary your pace - speed up for familiar topics, slow down for complex medical information.',
-                                'priority': 'Medium'
-                            })
-                        elif pace > 8.5:
-                            recommendations.append({
-                                'focus': 'Speaking Pace',
-                                'emoji': '⏸️',
-                                'action': 'Slow down slightly. Patients need time to process medical information and formulate questions.',
-                                'tip': 'Pause after important points. Watch for patient cues that they need you to slow down.',
-                                'priority': 'High' if pace > 9.0 else 'Medium'
-                            })
-                    
-                    # Pauses recommendations
-                    if 'speech_pauses' in student_soc.columns:
-                        pauses = latest_soc['speech_pauses']
-                        if pauses < 6.0:
-                            recommendations.append({
-                                'focus': 'Pauses',
-                                'emoji': '⏯️',
-                                'action': 'Incorporate more meaningful pauses after asking important questions. Silence is okay - it gives patients time to think.',
-                                'tip': 'Count to 3 after asking a question before elaborating. Let silence work for you.',
-                                'priority': 'High' if pauses < 4.0 else 'Medium'
-                            })
-                    
-                    # Pitch recommendations
-                    if 'speech_pitch' in student_soc.columns:
-                        pitch = latest_soc['speech_pitch']
-                        if pitch < 5.0 or pitch > 8.5:
-                            recommendations.append({
-                                'focus': 'Pitch Variation',
-                                'emoji': '🎵',
-                                'action': 'Work on varying your pitch to maintain engagement and emphasize important points.',
-                                'tip': 'Use rising intonation for questions and falling for statements. Avoid monotone delivery.',
-                                'priority': 'Medium'
-                            })
-            
-            # Display recommendations
-            if recommendations:
-                # Sort by priority
-                high_priority = [r for r in recommendations if r.get('priority') == 'High']
-                medium_priority = [r for r in recommendations if r.get('priority') == 'Medium']
-                
-                all_recs = high_priority + medium_priority
-                
-                for idx, rec in enumerate(all_recs[:3], 1):  # Show top 3 recommendations
-                    priority_color = '🔴' if rec.get('priority') == 'High' else '🟡'
-                    st.markdown(f"### {rec['emoji']} Focus Area {idx}: {rec['focus']} {priority_color}")
-                    st.write(f"**Action:** {rec['action']}")
-                    if 'tip' in rec:
-                        st.info(f"**💭 Tip:** {rec['tip']}")
-                    st.markdown("")
-            else:
-                st.success("🎉 Great work! Continue practicing to maintain your current proficiency levels and work toward advanced mastery.")
-            
-            # Add Practice Suggestions based on selected chart type
-            st.markdown("---")
-            st.markdown("#### 📚 Practice Suggestions")
-            
-            practice_tips = []
-            
-            if chart_selection == "Encounter Assessment Components" and not student_soc.empty:
-                latest_soc = student_soc.iloc[-1]
-                
-                # Check encounter completeness
-                if 'encounter_chief_complaint' in student_soc.columns and latest_soc['encounter_chief_complaint'] == 0:
-                    practice_tips.append({
-                        'emoji': '🎯',
-                        'title': 'Chief Complaint',
-                        'suggestion': 'Always start with: "What brings you in today?" Document in patient\'s own words.'
-                    })
-                
-                if 'encounter_hpi' in student_soc.columns and latest_soc['encounter_hpi'] == 0:
-                    practice_tips.append({
-                        'emoji': '📋',
-                        'title': 'HPI Documentation',
-                        'suggestion': 'Practice the OLDCARTS framework daily. Create a checklist until it becomes automatic.'
-                    })
-                
-                if 'encounter_ros' in student_soc.columns and latest_soc['encounter_ros'] == 0:
-                    practice_tips.append({
-                        'emoji': '🔍',
-                        'title': 'Review of Systems',
-                        'suggestion': 'Develop a systematic approach. Even brief ROS questions can catch important findings.'
-                    })
-            
-            elif chart_selection == "Socratic Dialogue Components" and not student_soc.empty:
-                latest_soc = student_soc.iloc[-1]
-                
-                # Check Socratic components
-                if 'socratic_Question_Depth' in student_soc.columns and latest_soc['socratic_Question_Depth'] < 3.0:
-                    practice_tips.append({
-                        'emoji': '❓',
-                        'title': 'Question Depth',
-                        'suggestion': 'Review the Socratic questioning framework. Practice moving from surface-level to deeper exploratory questions.'
-                    })
-                
-                if 'socratic_Response_Completeness' in student_soc.columns and latest_soc['socratic_Response_Completeness'] < 3.0:
-                    practice_tips.append({
-                        'emoji': '👂',
-                        'title': 'Active Listening',
-                        'suggestion': 'Record yourself and review how completely you address patient concerns. Practice summarizing what you heard.'
-                    })
-                
-                if 'socratic_Plan_Flexibility' in student_soc.columns and latest_soc['socratic_Plan_Flexibility'] < 3.0:
-                    practice_tips.append({
-                        'emoji': '🤝',
-                        'title': 'Collaborative Planning',
-                        'suggestion': 'Practice shared decision-making. Always ask: "What do you think?" and "Does this work for you?"'
-                    })
-            
-            elif chart_selection == "Speech Quality Metrics" and not student_soc.empty:
-                latest_soc = student_soc.iloc[-1]
-                
-                # Check speech metrics
-                if 'speech_pace' in student_soc.columns:
-                    pace = latest_soc['speech_pace']
-                    if pace < 6.0:
-                        practice_tips.append({
-                            'emoji': '⏩',
-                            'title': 'Speaking Pace',
-                            'suggestion': 'Your pace may be too slow. Practice maintaining conversational flow while still allowing patient processing time.'
+                    # Encounter practice tips
+                    if 'encounter_chief_complaint' in student_soc.columns and latest_soc['encounter_chief_complaint'] == 0:
+                        all_practice_tips.append({
+                            'category': 'Encounter',
+                            'emoji': '🎯',
+                            'title': 'Chief Complaint Practice',
+                            'suggestion': 'Role-play opening questions. Always start with "What brings you in today?" and document in patient\'s own words.'
                         })
-                    elif pace > 9.0:
-                        practice_tips.append({
+                    
+                    if 'encounter_hpi' in student_soc.columns and latest_soc['encounter_hpi'] == 0:
+                        all_practice_tips.append({
+                            'category': 'Encounter',
+                            'emoji': '📋',
+                            'title': 'HPI Documentation',
+                            'suggestion': 'Practice the OLDCARTS framework daily. Create a checklist until it becomes automatic.'
+                        })
+                    
+                    # Socratic practice tips
+                    if 'socratic_Question_Depth' in student_soc.columns and latest_soc['socratic_Question_Depth'] < 3.0:
+                        all_practice_tips.append({
+                            'category': 'Socratic',
+                            'emoji': '❓',
+                            'title': 'Deep Questioning',
+                            'suggestion': 'Review the Socratic questioning framework. Practice moving from surface-level to deeper exploratory questions.'
+                        })
+                    
+                    if 'socratic_Response_Completeness' in student_soc.columns and latest_soc['socratic_Response_Completeness'] < 3.0:
+                        all_practice_tips.append({
+                            'category': 'Socratic',
+                            'emoji': '👂',
+                            'title': 'Active Listening',
+                            'suggestion': 'Record yourself and review how completely you address patient concerns. Practice summarizing what you heard.'
+                        })
+                    
+                    if 'socratic_Plan_Flexibility' in student_soc.columns and latest_soc['socratic_Plan_Flexibility'] < 3.0:
+                        all_practice_tips.append({
+                            'category': 'Socratic',
+                            'emoji': '🤝',
+                            'title': 'Collaborative Planning',
+                            'suggestion': 'Practice shared decision-making. Always ask: "What do you think?" and "Does this work for you?"'
+                        })
+                    
+                    # Speech practice tips
+                    if 'speech_volume' in student_soc.columns and latest_soc['speech_volume'] < 6.0:
+                        all_practice_tips.append({
+                            'category': 'Speech',
+                            'emoji': '🔊',
+                            'title': 'Voice Projection',
+                            'suggestion': 'Practice diaphragmatic breathing and speaking with confidence. Record yourself to check volume consistency.'
+                        })
+                    
+                    if 'speech_pace' in student_soc.columns and latest_soc['speech_pace'] > 9.0:
+                        all_practice_tips.append({
+                            'category': 'Speech',
                             'emoji': '⏸️',
-                            'title': 'Speaking Pace',
-                            'suggestion': 'Slow down slightly. Patients need time to process medical information.'
+                            'title': 'Pacing Control',
+                            'suggestion': 'Practice speaking slowly with intentional pauses. Read aloud and time yourself to develop awareness.'
+                        })
+                    
+                    if 'speech_pauses' in student_soc.columns and latest_soc['speech_pauses'] < 6.0:
+                        all_practice_tips.append({
+                            'category': 'Speech',
+                            'emoji': '⏯️',
+                            'title': 'Strategic Pausing',
+                            'suggestion': 'Count to 3 after asking important questions before elaborating. Let silence work for you.'
                         })
                 
-                if 'speech_pauses' in student_soc.columns and latest_soc['speech_pauses'] < 6.0:
-                    practice_tips.append({
-                        'emoji': '⏯️',
-                        'title': 'Pauses',
-                        'suggestion': 'Incorporate more meaningful pauses after asking important questions. Silence is okay - it gives patients time to think.'
-                    })
-                
-                if 'speech_volume' in student_soc.columns and latest_soc['speech_volume'] < 6.0:
-                    practice_tips.append({
-                        'emoji': '🔊',
-                        'title': 'Volume',
-                        'suggestion': 'Project your voice more. Practice diaphragmatic breathing and speaking with confidence.'
-                    })
-            
-            if practice_tips:
-                for tip in practice_tips:
-                    st.markdown(f"**{tip['emoji']} {tip['title']}:** {tip['suggestion']}")
-                    st.markdown("")
+                if all_practice_tips:
+                    # Display practice tips as clean cards with colored left borders
+                    practice_colors = [
+                        "#3498DB",  # Blue
+                        "#2ECC71",  # Green
+                        "#E67E22",  # Orange
+                        "#9B59B6",  # Purple
+                        "#E74C3C"   # Red
+                    ]
+                    
+                    for idx, tip in enumerate(all_practice_tips):
+                        color = practice_colors[idx % len(practice_colors)]
+                        st.markdown(f"""
+                        <div class="practice-card" style="border-color: {color};">
+                            <div class="practice-title">{tip['emoji']} {tip['title']}</div>
+                            <div class="practice-text">{tip['suggestion']}</div>
+                            <div style="margin-top: 8px; font-size: 0.8rem; color: #888;">Category: {tip['category']}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    st.markdown("""
+                    <div style="background: white; padding: 24px; border-radius: 12px; text-align: center; box-shadow: 0 2px 12px rgba(0,0,0,0.06); border-left: 5px solid #2ECC71;">
+                        <div style="font-size: 2rem; margin-bottom: 12px;">✨</div>
+                        <div style="font-size: 1.2rem; font-weight: 700; margin-bottom: 12px; color: #1a1a2e;">Strong Proficiency Across All Areas!</div>
+                        <div style="color: #555; margin-bottom: 12px;">Consider these advanced practices:</div>
+                        <ul style="text-align: left; margin-top: 12px; color: #555;">
+                            <li>Mentor peers on effective patient communication techniques</li>
+                            <li>Practice with more complex patient scenarios</li>
+                            <li>Focus on efficiency without sacrificing thoroughness</li>
+                        </ul>
+                    </div>
+                    """, unsafe_allow_html=True)
             else:
-                st.info("✨ Your performance across all metrics shows strong proficiency. Keep up the excellent work!")
-            
-            # Feedback Rating Section
-            st.markdown("---")
-            st.markdown("#### Rate This Feedback")
-            st.caption("Your ratings help us improve the feedback system. Please rate each aspect on a scale of 1-5.")
-            st.markdown("")
-            
-            # Initialize session state for ratings if not exists
-            if 'clarity_rating' not in st.session_state:
-                st.session_state.clarity_rating = 3
-            if 'actionability_rating' not in st.session_state:
-                st.session_state.actionability_rating = 3
-            if 'detail_rating' not in st.session_state:
-                st.session_state.detail_rating = 3
-            if 'question_rating' not in st.session_state:
-                st.session_state.question_rating = 3
-            if 'overall_rating' not in st.session_state:
-                st.session_state.overall_rating = 3
-            
-            # Clarity Rating
-            st.markdown("**Clarity: How clear was the feedback?**")
-            clarity_cols = st.columns(5)
-            for idx, col in enumerate(clarity_cols):
-                with col:
-                    button_type = "primary" if st.session_state.clarity_rating == idx + 1 else "secondary"
-                    if st.button(str(idx + 1), key=f"clarity_{idx+1}_{selected_student}", use_container_width=True, type=button_type):
-                        st.session_state.clarity_rating = idx + 1
-                        st.rerun()
-            col1, col2 = st.columns(2)
-            with col1:
-                st.caption("Very Unclear")
-            with col2:
-                st.caption("Very Clear")
-            st.markdown("")
-            
-            # Actionability Rating
-            st.markdown("**Actionability: How actionable were the recommendations?**")
-            actionability_cols = st.columns(5)
-            for idx, col in enumerate(actionability_cols):
-                with col:
-                    button_type = "primary" if st.session_state.actionability_rating == idx + 1 else "secondary"
-                    if st.button(str(idx + 1), key=f"actionability_{idx+1}_{selected_student}", use_container_width=True, type=button_type):
-                        st.session_state.actionability_rating = idx + 1
-                        st.rerun()
-            col1, col2 = st.columns(2)
-            with col1:
-                st.caption("Not Actionable")
-            with col2:
-                st.caption("Very Actionable")
-            st.markdown("")
-            
-            # Detail Rating
-            st.markdown("**Appropriate Detail: Was the level of detail appropriate?**")
-            detail_cols = st.columns(5)
-            for idx, col in enumerate(detail_cols):
-                with col:
-                    button_type = "primary" if st.session_state.detail_rating == idx + 1 else "secondary"
-                    if st.button(str(idx + 1), key=f"detail_{idx+1}_{selected_student}", use_container_width=True, type=button_type):
-                        st.session_state.detail_rating = idx + 1
-                        st.rerun()
-            col1, col2 = st.columns(2)
-            with col1:
-                st.caption("Too Little/Too Much")
-            with col2:
-                st.caption("Just Right")
-            st.markdown("")
-            
-            # Question Quality Rating
-            st.markdown("**Question Quality: Were the reflection questions helpful?**")
-            question_cols = st.columns(5)
-            for idx, col in enumerate(question_cols):
-                with col:
-                    button_type = "primary" if st.session_state.question_rating == idx + 1 else "secondary"
-                    if st.button(str(idx + 1), key=f"question_{idx+1}_{selected_student}", use_container_width=True, type=button_type):
-                        st.session_state.question_rating = idx + 1
-                        st.rerun()
-            col1, col2 = st.columns(2)
-            with col1:
-                st.caption("Not Helpful")
-            with col2:
-                st.caption("Very Helpful")
-            st.markdown("")
-            
-            # Overall Satisfaction Rating
-            st.markdown("**Overall Satisfaction: Overall, how satisfied are you with this feedback?**")
-            overall_cols = st.columns(5)
-            for idx, col in enumerate(overall_cols):
-                with col:
-                    button_type = "primary" if st.session_state.overall_rating == idx + 1 else "secondary"
-                    if st.button(str(idx + 1), key=f"overall_{idx+1}_{selected_student}", use_container_width=True, type=button_type):
-                        st.session_state.overall_rating = idx + 1
-                        st.rerun()
-            col1, col2 = st.columns(2)
-            with col1:
-                st.caption("Very Dissatisfied")
-            with col2:
-                st.caption("Very Satisfied")
-            st.markdown("")
-            
-            # Submit button
-            col1, col2, col3 = st.columns([1, 1, 1])
-            with col2:
-                if st.button("Submit Ratings", key=f"submit_ratings_{selected_student}", type="primary", use_container_width=True):
-                    st.success("Thank you for your feedback! Your ratings have been recorded.")
-                    with st.expander("View Your Ratings"):
-                        st.write(f"**Clarity:** {st.session_state.clarity_rating}/5")
-                        st.write(f"**Actionability:** {st.session_state.actionability_rating}/5")
-                        st.write(f"**Appropriate Detail:** {st.session_state.detail_rating}/5")
-                        st.write(f"**Question Quality:** {st.session_state.question_rating}/5")
-                        st.write(f"**Overall Satisfaction:** {st.session_state.overall_rating}/5")
+                st.markdown("""
+                <div style="background: #e9ecef; padding: 40px; border-radius: 16px; text-align: center;">
+                    <div style="font-size: 3rem; margin-bottom: 16px;">📋</div>
+                    <div style="font-size: 1.3rem; font-weight: 600; color: #495057; margin-bottom: 8px;">No Data Available</div>
+                    <div style="color: #6c757d;">Complete at least one assessment to see summary statistics.</div>
+                </div>
+                """, unsafe_allow_html=True)
+        
+        # Feedback Rating Section - appears at bottom of all chart views
+        st.markdown("---")
+        st.markdown("#### Rate This Feedback")
+        st.caption("Your ratings help us improve the feedback system. Please rate each aspect on a scale of 1-5.")
+        st.markdown("")
+        
+        # Initialize session state for ratings if not exists
+        if 'clarity_rating' not in st.session_state:
+            st.session_state.clarity_rating = 3
+        if 'actionability_rating' not in st.session_state:
+            st.session_state.actionability_rating = 3
+        if 'detail_rating' not in st.session_state:
+            st.session_state.detail_rating = 3
+        if 'question_rating' not in st.session_state:
+            st.session_state.question_rating = 3
+        if 'overall_rating' not in st.session_state:
+            st.session_state.overall_rating = 3
+        
+        # Clarity Rating
+        st.markdown("**Clarity: How clear was the feedback?**")
+        clarity_cols = st.columns(5)
+        for idx, col in enumerate(clarity_cols):
+            with col:
+                button_type = "primary" if st.session_state.clarity_rating == idx + 1 else "secondary"
+                if st.button(str(idx + 1), key=f"clarity_{idx+1}_{selected_student}_{chart_selection}", use_container_width=True, type=button_type):
+                    st.session_state.clarity_rating = idx + 1
+                    st.rerun()
+        col1, col2 = st.columns(2)
+        with col1:
+            st.caption("Very Unclear")
+        with col2:
+            st.caption("Very Clear")
+        st.markdown("")
+        
+        # Actionability Rating
+        st.markdown("**Actionability: How actionable were the recommendations?**")
+        actionability_cols = st.columns(5)
+        for idx, col in enumerate(actionability_cols):
+            with col:
+                button_type = "primary" if st.session_state.actionability_rating == idx + 1 else "secondary"
+                if st.button(str(idx + 1), key=f"actionability_{idx+1}_{selected_student}_{chart_selection}", use_container_width=True, type=button_type):
+                    st.session_state.actionability_rating = idx + 1
+                    st.rerun()
+        col1, col2 = st.columns(2)
+        with col1:
+            st.caption("Not Actionable")
+        with col2:
+            st.caption("Very Actionable")
+        st.markdown("")
+        
+        # Detail Rating
+        st.markdown("**Appropriate Detail: Was the level of detail appropriate?**")
+        detail_cols = st.columns(5)
+        for idx, col in enumerate(detail_cols):
+            with col:
+                button_type = "primary" if st.session_state.detail_rating == idx + 1 else "secondary"
+                if st.button(str(idx + 1), key=f"detail_{idx+1}_{selected_student}_{chart_selection}", use_container_width=True, type=button_type):
+                    st.session_state.detail_rating = idx + 1
+                    st.rerun()
+        col1, col2 = st.columns(2)
+        with col1:
+            st.caption("Too Little/Too Much")
+        with col2:
+            st.caption("Just Right")
+        st.markdown("")
+        
+        # Question Quality Rating
+        st.markdown("**Question Quality: Were the reflection questions helpful?**")
+        question_cols = st.columns(5)
+        for idx, col in enumerate(question_cols):
+            with col:
+                button_type = "primary" if st.session_state.question_rating == idx + 1 else "secondary"
+                if st.button(str(idx + 1), key=f"question_{idx+1}_{selected_student}_{chart_selection}", use_container_width=True, type=button_type):
+                    st.session_state.question_rating = idx + 1
+                    st.rerun()
+        col1, col2 = st.columns(2)
+        with col1:
+            st.caption("Not Helpful")
+        with col2:
+            st.caption("Very Helpful")
+        st.markdown("")
+        
+        # Overall Satisfaction Rating
+        st.markdown("**Overall Satisfaction: Overall, how satisfied are you with this feedback?**")
+        overall_cols = st.columns(5)
+        for idx, col in enumerate(overall_cols):
+            with col:
+                button_type = "primary" if st.session_state.overall_rating == idx + 1 else "secondary"
+                if st.button(str(idx + 1), key=f"overall_{idx+1}_{selected_student}_{chart_selection}", use_container_width=True, type=button_type):
+                    st.session_state.overall_rating = idx + 1
+                    st.rerun()
+        col1, col2 = st.columns(2)
+        with col1:
+            st.caption("Very Dissatisfied")
+        with col2:
+            st.caption("Very Satisfied")
+        st.markdown("")
+        
+        # Submit button
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col2:
+            if st.button("Submit Ratings", key=f"submit_ratings_{selected_student}_{chart_selection}", type="primary", use_container_width=True):
+                st.success("Thank you for your feedback! Your ratings have been recorded.")
+                with st.expander("View Your Ratings"):
+                    st.write(f"**Clarity:** {st.session_state.clarity_rating}/5")
+                    st.write(f"**Actionability:** {st.session_state.actionability_rating}/5")
+                    st.write(f"**Appropriate Detail:** {st.session_state.detail_rating}/5")
+                    st.write(f"**Question Quality:** {st.session_state.question_rating}/5")
+                    st.write(f"**Overall Satisfaction:** {st.session_state.overall_rating}/5")
+    
     else:
         st.warning(f"No data for {selected_student}")
 
