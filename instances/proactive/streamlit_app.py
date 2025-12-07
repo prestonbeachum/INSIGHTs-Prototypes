@@ -494,7 +494,7 @@ with tab2:
             with col1:
                 filter_type = st.radio(
                     "Filter type",
-                    options=["All", "Last 5", "Individual"],
+                    options=["All", "Last 5", "Individual attempt(s)"],
                     key=f"filter_type_{selected_student}_encounter",
                     label_visibility="collapsed",
                     horizontal=False
@@ -507,7 +507,7 @@ with tab2:
                 elif filter_type == "Last 5":
                     selected_attempt_nums = unique_attempts[-5:] if len(unique_attempts) >= 5 else unique_attempts
                     st.info(f"Showing last {len(selected_attempt_nums)} attempt(s): {', '.join(map(str, selected_attempt_nums))}")
-                else:  # Individual
+                else:  # Individual attempt(s)
                     selected_attempt_nums = st.multiselect(
                         label="Choose which attempts to display",
                         options=unique_attempts,
@@ -659,14 +659,26 @@ with tab2:
                         if first_scores and last_scores:
                             first_attempt_avg = np.mean(first_scores)
                             last_attempt_avg = np.mean(last_scores)
-                            improvement = last_attempt_avg - first_attempt_avg
                             
-                            if improvement > 0:
-                                st.success(f"Improvement: +{improvement:.2f} points")
-                            elif improvement < 0:
-                                st.warning(f"Change: {improvement:.2f} points")
+                            # Calculate percentage change
+                            if first_attempt_avg > 0:
+                                improvement_pct = ((last_attempt_avg - first_attempt_avg) / first_attempt_avg) * 100
+                                
+                                if improvement_pct > 0:
+                                    st.success(f"📈 Improvement: +{improvement_pct:.1f}%")
+                                elif improvement_pct < 0:
+                                    st.warning(f"📉 Change: {improvement_pct:.1f}%")
+                                else:
+                                    st.info(f"➡️ No change: {improvement_pct:.1f}%")
                             else:
-                                st.info(f"No change: {improvement:.2f} points")
+                                # If first attempt is 0, show absolute change
+                                improvement = last_attempt_avg - first_attempt_avg
+                                if improvement > 0:
+                                    st.success(f"📈 Improvement: +{improvement:.2f} points")
+                                elif improvement < 0:
+                                    st.warning(f"📉 Change: {improvement:.2f} points")
+                                else:
+                                    st.info(f"➡️ No change: {improvement:.2f} points")
                     else:
                         st.info("Please select at least one attempt to view statistics")
         
@@ -702,7 +714,7 @@ with tab2:
                 with col1:
                     filter_type_soc = st.radio(
                         "Filter type",
-                        options=["All", "Last 5", "Individual"],
+                        options=["All", "Last 5", "Individual attempt(s)"],
                         key=f"filter_type_{selected_student}_socratic",
                         label_visibility="collapsed",
                         horizontal=False
@@ -715,7 +727,7 @@ with tab2:
                     elif filter_type_soc == "Last 5":
                         selected_soc_attempt_nums = unique_soc_attempts[-5:] if len(unique_soc_attempts) >= 5 else unique_soc_attempts
                         st.info(f"Showing last {len(selected_soc_attempt_nums)} attempt(s): {', '.join(map(str, selected_soc_attempt_nums))}")
-                    else:  # Individual
+                    else:  # Individual attempt(s)
                         selected_soc_attempt_nums = st.multiselect(
                             label="Choose which attempts to display",
                             options=unique_soc_attempts,
@@ -844,14 +856,26 @@ with tab2:
                             sorted_selected_soc = sorted(selected_soc_attempt_nums)
                             first_attempt_avg = student_soc[student_soc['attempt'] == sorted_selected_soc[0]][component_cols].mean().mean()
                             last_attempt_avg = student_soc[student_soc['attempt'] == sorted_selected_soc[-1]][component_cols].mean().mean()
-                            improvement = last_attempt_avg - first_attempt_avg
                             
-                            if improvement > 0:
-                                st.success(f"📈 Improvement: +{improvement:.2f} points")
-                            elif improvement < 0:
-                                st.warning(f"📉 Change: {improvement:.2f} points")
+                            # Calculate percentage change
+                            if first_attempt_avg > 0:
+                                improvement_pct = ((last_attempt_avg - first_attempt_avg) / first_attempt_avg) * 100
+                                
+                                if improvement_pct > 0:
+                                    st.success(f"📈 Improvement: +{improvement_pct:.1f}%")
+                                elif improvement_pct < 0:
+                                    st.warning(f"📉 Change: {improvement_pct:.1f}%")
+                                else:
+                                    st.info(f"➡️ No change: {improvement_pct:.1f}%")
                             else:
-                                st.info(f"➡️ No change: {improvement:.2f} points")
+                                # If first attempt is 0, show absolute change
+                                improvement = last_attempt_avg - first_attempt_avg
+                                if improvement > 0:
+                                    st.success(f"📈 Improvement: +{improvement:.2f} points")
+                                elif improvement < 0:
+                                    st.warning(f"📉 Change: {improvement:.2f} points")
+                                else:
+                                    st.info(f"➡️ No change: {improvement:.2f} points")
                         else:
                             st.info("Please select at least one attempt to view statistics")
                 else:
@@ -889,7 +913,7 @@ with tab2:
                 with col1:
                     filter_type_speech = st.radio(
                         "Filter type",
-                        options=["All", "Last 5", "Individual"],
+                        options=["All", "Last 5", "Individual attempt(s)"],
                         key=f"filter_type_{selected_student}_speech",
                         label_visibility="collapsed",
                         horizontal=False
@@ -902,7 +926,7 @@ with tab2:
                     elif filter_type_speech == "Last 5":
                         selected_speech_attempt_nums = unique_speech_attempts[-5:] if len(unique_speech_attempts) >= 5 else unique_speech_attempts
                         st.info(f"Showing last {len(selected_speech_attempt_nums)} attempt(s): {', '.join(map(str, selected_speech_attempt_nums))}")
-                    else:  # Individual
+                    else:  # Individual attempt(s)
                         selected_speech_attempt_nums = st.multiselect(
                             label="Choose which attempts to display",
                             options=unique_speech_attempts,
@@ -1031,14 +1055,26 @@ with tab2:
                             sorted_selected_speech = sorted(selected_speech_attempt_nums)
                             first_attempt_avg = student_soc[student_soc['attempt'] == sorted_selected_speech[0]][metric_cols].mean().mean()
                             last_attempt_avg = student_soc[student_soc['attempt'] == sorted_selected_speech[-1]][metric_cols].mean().mean()
-                            improvement = last_attempt_avg - first_attempt_avg
                             
-                            if improvement > 0:
-                                st.success(f"📈 Improvement: +{improvement:.2f} points")
-                            elif improvement < 0:
-                                st.warning(f"📉 Change: {improvement:.2f} points")
+                            # Calculate percentage change
+                            if first_attempt_avg > 0:
+                                improvement_pct = ((last_attempt_avg - first_attempt_avg) / first_attempt_avg) * 100
+                                
+                                if improvement_pct > 0:
+                                    st.success(f"📈 Improvement: +{improvement_pct:.1f}%")
+                                elif improvement_pct < 0:
+                                    st.warning(f"📉 Change: {improvement_pct:.1f}%")
+                                else:
+                                    st.info(f"➡️ No change: {improvement_pct:.1f}%")
                             else:
-                                st.info(f"➡️ No change: {improvement:.2f} points")
+                                # If first attempt is 0, show absolute change
+                                improvement = last_attempt_avg - first_attempt_avg
+                                if improvement > 0:
+                                    st.success(f"📈 Improvement: +{improvement:.2f} points")
+                                elif improvement < 0:
+                                    st.warning(f"📉 Change: {improvement:.2f} points")
+                                else:
+                                    st.info(f"➡️ No change: {improvement:.2f} points")
                     
                     st.caption("ℹ️ Speech quality assessed from encounter recording")
                 else:
