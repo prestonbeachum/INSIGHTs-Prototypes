@@ -921,7 +921,7 @@ with tab2:
                             <div style="padding: 15px; margin: 10px 0; border-left: 4px solid {priority_color}; background: #f8f9fa; border-radius: 5px;">
                                 <div style="display: flex; align-items: center; margin-bottom: 8px;">
                                     <span style="font-size: 1.5rem; margin-right: 10px;">{rec['icon']}</span>
-                                    <strong style="font-size: 1.1rem;">{rec['title']}</strong>
+                                    <strong style="font-size: 1.1rem; color: #000000;">{rec['title']}</strong>
                                     <span style="margin-left: auto; background: {priority_color}; color: white; padding: 4px 12px; border-radius: 12px; font-size: 0.85rem; font-weight: 600;">{priority_icon} {rec['priority']} Priority</span>
                                 </div>
                                 <div style="color: #555; line-height: 1.6;">→ {rec['text']}</div>
@@ -1433,7 +1433,7 @@ with tab2:
                                 <div style="padding: 15px; margin: 10px 0; border-left: 4px solid {priority_color}; background: #f8f9fa; border-radius: 5px;">
                                     <div style="display: flex; align-items: center; margin-bottom: 8px;">
                                         <span style="font-size: 1.5rem; margin-right: 10px;">{rec['icon']}</span>
-                                        <strong style="font-size: 1.1rem;">{rec['title']}</strong>
+                                        <strong style="font-size: 1.1rem; color: #000000;">{rec['title']}</strong>
                                         <span style="margin-left: auto; background: {priority_color}; color: white; padding: 4px 12px; border-radius: 12px; font-size: 0.85rem; font-weight: 600;">{priority_icon} {rec['priority']} Priority</span>
                                     </div>
                                     <div style="color: #555; line-height: 1.6;">→ {rec['text']}</div>
