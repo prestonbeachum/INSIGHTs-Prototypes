@@ -672,18 +672,17 @@ with tab2:
                                 else:
                                     st.info(f"➡️ No change: {improvement_pct:.1f}%")
                             else:
-                                # If first attempt is 0, show absolute change
-                                improvement = last_attempt_avg - first_attempt_avg
-                                if improvement > 0:
-                                    st.success(f"📈 Improvement: +{improvement:.2f} points")
-                                elif improvement < 0:
-                                    st.warning(f"📉 Change: {improvement:.2f} points")
+                                # If first attempt is 0, show percentage from baseline 1.0
+                                baseline = 1.0
+                                improvement_pct = ((last_attempt_avg - baseline) / baseline) * 100
+                                if improvement_pct > 0:
+                                    st.success(f"📈 Improvement: +{improvement_pct:.1f}%")
+                                elif improvement_pct < 0:
+                                    st.warning(f"📉 Change: {improvement_pct:.1f}%")
                                 else:
-                                    st.info(f"➡️ No change: {improvement:.2f} points")
-                    else:
-                        st.info("Please select at least one attempt to view statistics")
-            
-            # Add Encounter-specific Performance Summary
+                                    st.info(f"➡️ No change: {improvement_pct:.1f}%")
+                        else:
+                            st.info("Please select at least one attempt to view statistics")            # Add Encounter-specific Performance Summary
             st.markdown("---")
             st.markdown("### 📊 Encounter Assessment Performance Summary")
             
@@ -785,12 +784,16 @@ with tab2:
                                     first_val = (filtered_encounter[filtered_encounter['attempt'] == min(selected_attempt_nums)][col_name].values[0] * 4.5)
                                     last_val = (filtered_encounter[filtered_encounter['attempt'] == max(selected_attempt_nums)][col_name].values[0] * 4.5)
                                     change = last_val - first_val
-                                    if change > 0:
-                                        st.markdown(f"<div style='text-align: right; color: #28a745;'>↗️ +{change:.1f}</div>", unsafe_allow_html=True)
-                                    elif change < 0:
-                                        st.markdown(f"<div style='text-align: right; color: #dc3545;'>↘️ {change:.1f}</div>", unsafe_allow_html=True)
+                                    if first_val > 0:
+                                        change_pct = (change / first_val) * 100
+                                        if change > 0:
+                                            st.markdown(f"<div style='text-align: right; color: #28a745;'>↗️ +{change_pct:.0f}%</div>", unsafe_allow_html=True)
+                                        elif change < 0:
+                                            st.markdown(f"<div style='text-align: right; color: #dc3545;'>↘️ {change_pct:.0f}%</div>", unsafe_allow_html=True)
+                                        else:
+                                            st.markdown(f"<div style='text-align: right; color: #888;'>→ 0%</div>", unsafe_allow_html=True)
                                     else:
-                                        st.markdown(f"<div style='text-align: right; color: #888;'>→ 0.0</div>", unsafe_allow_html=True)
+                                        st.markdown(f"<div style='text-align: right; color: #888;'>→ N/A</div>", unsafe_allow_html=True)
                     
                     # Add Key Observations for Encounter
                     st.markdown("---")
@@ -815,7 +818,8 @@ with tab2:
                                     change_pct = (change / 4.5) * 100 if first_val > 0 else 100
                                     trending_up.append((comp_name, change, change_pct))
                                 elif last_val < 2.5:  # Below emerging level
-                                    needs_attention.append((comp_name, last_val, change))
+                                    change_pct = (change / first_val) * 100 if first_val > 0 else 0
+                                    needs_attention.append((comp_name, last_val, change_pct))
                         
                         col1, col2 = st.columns(2)
                         
@@ -844,13 +848,13 @@ with tab2:
                                 <div style="background: #fff3cd; padding: 15px; border-radius: 8px; border-left: 4px solid #ffc107;">
                                     <h4 style="color: #856404; margin-top: 0; margin-bottom: 12px;">⚠️ Needs Attention</h4>
                                 """, unsafe_allow_html=True)
-                                for comp_name, score, change in sorted(needs_attention, key=lambda x: x[1]):
+                                for comp_name, score, change_pct in sorted(needs_attention, key=lambda x: x[1]):
                                     st.markdown(f"""
                                     <div style="margin: 8px 0; padding-left: 10px;">
                                         <span style="color: #ffc107; font-size: 1.2rem; margin-right: 8px;">●</span>
                                         <strong style="color: #856404;">{comp_name}</strong>: 
                                         <span style="color: #dc3545; font-weight: 600;">{score:.1f}/5.0</span> 
-                                        <span style="color: #666;">({change:+.1f} change)</span>
+                                        <span style="color: #666;">({change_pct:+.0f}% change)</span>
                                     </div>
                                     """, unsafe_allow_html=True)
                                 st.markdown("</div>", unsafe_allow_html=True)
@@ -1185,14 +1189,15 @@ with tab2:
                                 else:
                                     st.info(f"➡️ No change: {improvement_pct:.1f}%")
                             else:
-                                # If first attempt is 0, show absolute change
-                                improvement = last_attempt_avg - first_attempt_avg
-                                if improvement > 0:
-                                    st.success(f"📈 Improvement: +{improvement:.2f} points")
-                                elif improvement < 0:
-                                    st.warning(f"📉 Change: {improvement:.2f} points")
+                                # If first attempt is 0, show percentage from baseline 1.0
+                                baseline = 1.0
+                                improvement_pct = ((last_attempt_avg - baseline) / baseline) * 100
+                                if improvement_pct > 0:
+                                    st.success(f"📈 Improvement: +{improvement_pct:.1f}%")
+                                elif improvement_pct < 0:
+                                    st.warning(f"📉 Change: {improvement_pct:.1f}%")
                                 else:
-                                    st.info(f"➡️ No change: {improvement:.2f} points")
+                                    st.info(f"➡️ No change: {improvement_pct:.1f}%")
                         else:
                             st.info("Please select at least one attempt to view statistics")
                 
@@ -1297,12 +1302,16 @@ with tab2:
                                             last_val = filtered_socratic[filtered_socratic['attempt'] == max(selected_soc_attempt_nums)][col_name].dropna().values
                                             if len(first_val) > 0 and len(last_val) > 0:
                                                 change = last_val[0] - first_val[0]
-                                                if change > 0:
-                                                    st.markdown(f"<div style='text-align: right; color: #28a745;'>↗️ +{change:.2f}</div>", unsafe_allow_html=True)
-                                                elif change < 0:
-                                                    st.markdown(f"<div style='text-align: right; color: #dc3545;'>↘️ {change:.2f}</div>", unsafe_allow_html=True)
+                                                if first_val[0] > 0:
+                                                    change_pct = (change / first_val[0]) * 100
+                                                    if change > 0:
+                                                        st.markdown(f"<div style='text-align: right; color: #28a745;'>↗️ +{change_pct:.0f}%</div>", unsafe_allow_html=True)
+                                                    elif change < 0:
+                                                        st.markdown(f"<div style='text-align: right; color: #dc3545;'>↘️ {change_pct:.0f}%</div>", unsafe_allow_html=True)
+                                                    else:
+                                                        st.markdown(f"<div style='text-align: right; color: #888;'>→ 0%</div>", unsafe_allow_html=True)
                                                 else:
-                                                    st.markdown(f"<div style='text-align: right; color: #888;'>→ 0.0</div>", unsafe_allow_html=True)
+                                                    st.markdown(f"<div style='text-align: right; color: #888;'>→ N/A</div>", unsafe_allow_html=True)
                         
                         # Add Key Observations for Socratic
                         st.markdown("---")
@@ -1328,7 +1337,8 @@ with tab2:
                                         if change > 0:
                                             trending_up.append((comp_name, change, change_pct))
                                         elif last_val[0] < 2.5:
-                                            needs_attention.append((comp_name, last_val[0], change))
+                                            change_pct_na = (change / first_val[0]) * 100 if first_val[0] > 0 else 0
+                                            needs_attention.append((comp_name, last_val[0], change_pct_na))
                             
                             col1, col2 = st.columns(2)
                             
@@ -1357,13 +1367,13 @@ with tab2:
                                     <div style="background: #fff3cd; padding: 15px; border-radius: 8px; border-left: 4px solid #ffc107;">
                                         <h4 style="color: #856404; margin-top: 0; margin-bottom: 12px;">⚠️ Needs Attention</h4>
                                     """, unsafe_allow_html=True)
-                                    for comp_name, score, change in sorted(needs_attention, key=lambda x: x[1]):
+                                    for comp_name, score, change_pct in sorted(needs_attention, key=lambda x: x[1]):
                                         st.markdown(f"""
                                         <div style="margin: 8px 0; padding-left: 10px;">
                                             <span style="color: #ffc107; font-size: 1.2rem; margin-right: 8px;">●</span>
                                             <strong style="color: #856404;">{comp_name}</strong>: 
                                             <span style="color: #dc3545; font-weight: 600;">{score:.2f}/5.0</span> 
-                                            <span style="color: #666;">({change:+.2f} change)</span>
+                                            <span style="color: #666;">({change_pct:+.0f}% change)</span>
                                         </div>
                                         """, unsafe_allow_html=True)
                                     st.markdown("</div>", unsafe_allow_html=True)
@@ -1696,14 +1706,15 @@ with tab2:
                                 else:
                                     st.info(f"➡️ No change: {improvement_pct:.1f}%")
                             else:
-                                # If first attempt is 0, show absolute change
-                                improvement = last_attempt_avg - first_attempt_avg
-                                if improvement > 0:
-                                    st.success(f"📈 Improvement: +{improvement:.2f} points")
-                                elif improvement < 0:
-                                    st.warning(f"📉 Change: {improvement:.2f} points")
+                                # If first attempt is 0, show percentage from baseline 5.0
+                                baseline = 5.0
+                                improvement_pct = ((last_attempt_avg - baseline) / baseline) * 100
+                                if improvement_pct > 0:
+                                    st.success(f"📈 Improvement: +{improvement_pct:.1f}%")
+                                elif improvement_pct < 0:
+                                    st.warning(f"📉 Change: {improvement_pct:.1f}%")
                                 else:
-                                    st.info(f"➡️ No change: {improvement:.2f} points")
+                                    st.info(f"➡️ No change: {improvement_pct:.1f}%")
                     
                     st.caption("ℹ️ Speech quality assessed from encounter recording")
                 
@@ -1810,13 +1821,16 @@ with tab2:
                                             last_val = filtered_speech[filtered_speech['attempt'] == max(selected_speech_attempt_nums)][col_name].dropna().values
                                             if len(first_val) > 0 and len(last_val) > 0:
                                                 change = last_val[0] - first_val[0]
-                                                change_pct = (change / 10.0) * 100
-                                                if change > 0:
-                                                    st.markdown(f"<div style='text-align: right; color: #28a745;'>↗️ +{change:.1f} ({change_pct:+.0f}%)</div>", unsafe_allow_html=True)
-                                                elif change < 0:
-                                                    st.markdown(f"<div style='text-align: right; color: #dc3545;'>↘️ {change:.1f} ({change_pct:.0f}%)</div>", unsafe_allow_html=True)
+                                                if first_val[0] > 0:
+                                                    change_pct = (change / first_val[0]) * 100
+                                                    if change > 0:
+                                                        st.markdown(f"<div style='text-align: right; color: #28a745;'>↗️ +{change_pct:.0f}%</div>", unsafe_allow_html=True)
+                                                    elif change < 0:
+                                                        st.markdown(f"<div style='text-align: right; color: #dc3545;'>↘️ {change_pct:.0f}%</div>", unsafe_allow_html=True)
+                                                    else:
+                                                        st.markdown(f"<div style='text-align: right; color: #888;'>→ 0%</div>", unsafe_allow_html=True)
                                                 else:
-                                                    st.markdown(f"<div style='text-align: right; color: #888;'>→ 0.0</div>", unsafe_allow_html=True)
+                                                    st.markdown(f"<div style='text-align: right; color: #888;'>→ N/A</div>", unsafe_allow_html=True)
                         
                         # Add Key Observations for Speech
                         st.markdown("---")
@@ -1842,7 +1856,8 @@ with tab2:
                                         if change > 0:
                                             trending_up.append((metric_name, change, change_pct))
                                         elif last_val[0] < 6.0:
-                                            needs_attention.append((metric_name, last_val[0], change))
+                                            change_pct_na = (change / first_val[0]) * 100 if first_val[0] > 0 else 0
+                                            needs_attention.append((metric_name, last_val[0], change_pct_na))
                             
                             col1, col2 = st.columns(2)
                             
@@ -1871,13 +1886,13 @@ with tab2:
                                     <div style="background: #fff3cd; padding: 15px; border-radius: 8px; border-left: 4px solid #ffc107;">
                                         <h4 style="color: #856404; margin-top: 0; margin-bottom: 12px;">⚠️ Needs Attention</h4>
                                     """, unsafe_allow_html=True)
-                                    for metric_name, score, change in sorted(needs_attention, key=lambda x: x[1]):
+                                    for metric_name, score, change_pct in sorted(needs_attention, key=lambda x: x[1]):
                                         st.markdown(f"""
                                         <div style="margin: 8px 0; padding-left: 10px;">
                                             <span style="color: #ffc107; font-size: 1.2rem; margin-right: 8px;">●</span>
                                             <strong style="color: #856404;">{metric_name}</strong>: 
                                             <span style="color: #dc3545; font-weight: 600;">{score:.1f}/10.0</span> 
-                                            <span style="color: #666;">({change:+.1f} change)</span>
+                                            <span style="color: #666;">({change_pct:+.0f}% change)</span>
                                         </div>
                                         """, unsafe_allow_html=True)
                                     st.markdown("</div>", unsafe_allow_html=True)
