@@ -150,12 +150,8 @@ with st.sidebar:
         
         st.markdown("")
         
-        # Iteration dropdown
-        st.markdown('<div class="filter-label">Iteration/Attempt</div>', unsafe_allow_html=True)
-        iteration_options = ["All Iterations"] + list(range(1, 6))
-        iteration = st.selectbox("Iteration", iteration_options, 
-                                key="iteration", label_visibility="collapsed",
-                                help="Select which attempt to view, or 'All Iterations' to view aggregate data")
+        # Set iteration to "All Iterations" since filtering is now done on main page
+        iteration = "All Iterations"
         
         st.markdown("---")
         
@@ -494,7 +490,7 @@ with tab2:
             with col1:
                 filter_type = st.radio(
                     "Filter type",
-                    options=["All", "Last 5", "Individual attempt(s)"],
+                    options=["All", "Last 5", "Attempt range"],
                     key=f"filter_type_{selected_student}_encounter",
                     label_visibility="collapsed",
                     horizontal=False
@@ -507,15 +503,20 @@ with tab2:
                 elif filter_type == "Last 5":
                     selected_attempt_nums = unique_attempts[-5:] if len(unique_attempts) >= 5 else unique_attempts
                     st.info(f"Showing last {len(selected_attempt_nums)} attempt(s): {', '.join(map(str, selected_attempt_nums))}")
-                else:  # Individual attempt(s)
-                    selected_attempt_nums = st.multiselect(
-                        label="Choose which attempts to display",
-                        options=unique_attempts,
-                        default=unique_attempts,
-                        key=f"attempt_multiselect_{selected_student}_encounter",
-                        label_visibility="collapsed",
-                        help="Select one or more attempts to display on the graph"
-                    )
+                else:  # Attempt range
+                    if len(unique_attempts) > 1:
+                        range_values = st.slider(
+                            "Select attempt range",
+                            min_value=int(min(unique_attempts)),
+                            max_value=int(max(unique_attempts)),
+                            value=(int(min(unique_attempts)), int(max(unique_attempts))),
+                            key=f"attempt_range_{selected_student}_encounter",
+                            help="Drag to select a range of attempts"
+                        )
+                        selected_attempt_nums = [a for a in unique_attempts if range_values[0] <= a <= range_values[1]]
+                    else:
+                        selected_attempt_nums = unique_attempts
+                        st.info(f"Only 1 attempt available")
             
             fig = go.Figure()
             
@@ -681,6 +682,317 @@ with tab2:
                                     st.info(f"➡️ No change: {improvement:.2f} points")
                     else:
                         st.info("Please select at least one attempt to view statistics")
+            
+            # Add Encounter-specific Performance Summary
+            st.markdown("---")
+            st.markdown("### 📊 Encounter Assessment Performance Summary")
+            
+            if not student_encounter.empty and len(selected_attempt_nums) > 0:
+                # Calculate encounter-specific statistics
+                filtered_encounter = student_encounter[student_encounter['attempt'].isin(selected_attempt_nums)]
+                
+                # Overall Encounter Performance
+                encounter_scores = []
+                for col_name in component_cols:
+                    if col_name in filtered_encounter.columns:
+                        encounter_scores.extend((filtered_encounter[col_name].values * 4.5).tolist())
+                
+                if encounter_scores:
+                    enc_mean = np.mean(encounter_scores)
+                    enc_std = np.std(encounter_scores, ddof=1) if len(encounter_scores) > 1 else 0
+                    
+                    # Performance level
+                    if enc_mean >= 4.1:
+                        perf_level = "Advanced"
+                        perf_color = "#28a745"
+                    elif enc_mean >= 3.1:
+                        perf_level = "Proficient"
+                        perf_color = "#17a2b8"
+                    elif enc_mean >= 2.1:
+                        perf_level = "Emerging"
+                        perf_color = "#ff9800"
+                    else:
+                        perf_level = "Developing"
+                        perf_color = "#dc3545"
+                    
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.markdown(f"""
+                        <div style="padding: 20px; border-radius: 10px; background: linear-gradient(135deg, {perf_color}22 0%, {perf_color}11 100%); border-left: 4px solid {perf_color}; text-align: center;">
+                            <div style="font-size: 1.1rem; color: #666; margin-bottom: 10px;">🏥 Overall Score</div>
+                            <div style="font-size: 2.5rem; font-weight: bold; color: {perf_color};">{enc_mean:.1f}<span style="font-size: 1.5rem; color: #888;">/5.0</span></div>
+                            <div style="font-size: 0.9rem; color: #888; margin-top: 5px;">±{enc_std:.2f} std dev</div>
+                            <div style="margin-top: 10px; padding: 8px; background: {perf_color}; color: white; border-radius: 20px; font-weight: 600;">{perf_level}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    with col2:
+                        st.metric("📊 Attempts Analyzed", len(selected_attempt_nums))
+                        st.metric("📈 Components Tracked", len(component_names))
+                    
+                    with col3:
+                        # Calculate completion rate
+                        total_possible = len(component_cols) * len(selected_attempt_nums)
+                        completed = sum(encounter_scores) / 4.5  # Convert back to count
+                        completion_rate = (completed / total_possible) * 100 if total_possible > 0 else 0
+                        st.metric("✓ Completion Rate", f"{completion_rate:.1f}%")
+                        
+                        # Trend
+                        if len(selected_attempt_nums) >= 2:
+                            first_scores = []
+                            last_scores = []
+                            first_attempt = min(selected_attempt_nums)
+                            last_attempt = max(selected_attempt_nums)
+                            
+                            for col_name in component_cols:
+                                if col_name in filtered_encounter.columns:
+                                    first_val = filtered_encounter[filtered_encounter['attempt'] == first_attempt][col_name].values[0] * 4.5
+                                    last_val = filtered_encounter[filtered_encounter['attempt'] == last_attempt][col_name].values[0] * 4.5
+                                    first_scores.append(first_val)
+                                    last_scores.append(last_val)
+                            
+                            if first_scores and last_scores:
+                                trend = np.mean(last_scores) - np.mean(first_scores)
+                                if trend > 0:
+                                    st.metric("📈 Overall Trend", f"+{trend:.2f}", delta=f"+{trend:.2f}")
+                                elif trend < 0:
+                                    st.metric("📉 Overall Trend", f"{trend:.2f}", delta=f"{trend:.2f}")
+                                else:
+                                    st.metric("➡️ Overall Trend", "Stable")
+                    
+                    st.markdown("#### 🎯 Component Performance Breakdown")
+                    
+                    # Component-specific breakdown
+                    for comp_name, col_name in encounter_components.items():
+                        if col_name in filtered_encounter.columns:
+                            comp_scores = (filtered_encounter[col_name].values * 4.5)
+                            comp_mean = np.mean(comp_scores)
+                            comp_completion = (comp_scores > 0).sum() / len(comp_scores) * 100
+                            
+                            col_a, col_b = st.columns([3, 1])
+                            with col_a:
+                                # Match score card thresholds: Advanced (4.1+), Proficient (3.1+), Emerging (2.1+), Developing (<2.1)
+                                if comp_mean >= 4.1:
+                                    st.markdown(f"<div style='padding: 10px; background: #d4edda; border-left: 4px solid #28a745; border-radius: 5px; color: #155724;'>✓ <strong>{comp_name}</strong>: {comp_mean:.1f}/5.0 ({comp_completion:.0f}% completion) - <span style='color: #28a745; font-weight: 600;'>Advanced</span></div>", unsafe_allow_html=True)
+                                elif comp_mean >= 3.1:
+                                    st.markdown(f"<div style='padding: 10px; background: #d1ecf1; border-left: 4px solid #17a2b8; border-radius: 5px; color: #0c5460;'>✓ <strong>{comp_name}</strong>: {comp_mean:.1f}/5.0 ({comp_completion:.0f}% completion) - <span style='color: #17a2b8; font-weight: 600;'>Proficient</span></div>", unsafe_allow_html=True)
+                                elif comp_mean >= 2.1:
+                                    st.markdown(f"<div style='padding: 10px; background: #fff3cd; border-left: 4px solid #ff9800; border-radius: 5px; color: #856404;'>⚠ <strong>{comp_name}</strong>: {comp_mean:.1f}/5.0 ({comp_completion:.0f}% completion) - <span style='color: #ff9800; font-weight: 600;'>Emerging</span></div>", unsafe_allow_html=True)
+                                else:
+                                    st.markdown(f"<div style='padding: 10px; background: #f8d7da; border-left: 4px solid #dc3545; border-radius: 5px; color: #721c24;'>⚠ <strong>{comp_name}</strong>: {comp_mean:.1f}/5.0 ({comp_completion:.0f}% completion) - <span style='color: #dc3545; font-weight: 600;'>Developing</span></div>", unsafe_allow_html=True)
+                            with col_b:
+                                if len(selected_attempt_nums) >= 2:
+                                    first_val = (filtered_encounter[filtered_encounter['attempt'] == min(selected_attempt_nums)][col_name].values[0] * 4.5)
+                                    last_val = (filtered_encounter[filtered_encounter['attempt'] == max(selected_attempt_nums)][col_name].values[0] * 4.5)
+                                    change = last_val - first_val
+                                    if change > 0:
+                                        st.markdown(f"<div style='text-align: right; color: #28a745;'>↗️ +{change:.1f}</div>", unsafe_allow_html=True)
+                                    elif change < 0:
+                                        st.markdown(f"<div style='text-align: right; color: #dc3545;'>↘️ {change:.1f}</div>", unsafe_allow_html=True)
+                                    else:
+                                        st.markdown(f"<div style='text-align: right; color: #888;'>→ 0.0</div>", unsafe_allow_html=True)
+                    
+                    # Add Key Observations for Encounter
+                    st.markdown("---")
+                    st.markdown("""
+                    <h2 style="color: #ffffff; font-size: 2rem; margin-bottom: 10px;">
+                        🔍 Key Observations - Encounter Assessment
+                    </h2>
+                    """, unsafe_allow_html=True)
+                    
+                    # Identify trending components
+                    if len(selected_attempt_nums) >= 2:
+                        trending_up = []
+                        needs_attention = []
+                        
+                        for comp_name, col_name in encounter_components.items():
+                            if col_name in filtered_encounter.columns:
+                                first_val = (filtered_encounter[filtered_encounter['attempt'] == min(selected_attempt_nums)][col_name].values[0] * 4.5)
+                                last_val = (filtered_encounter[filtered_encounter['attempt'] == max(selected_attempt_nums)][col_name].values[0] * 4.5)
+                                change = last_val - first_val
+                                
+                                if change > 0:
+                                    change_pct = (change / 4.5) * 100 if first_val > 0 else 100
+                                    trending_up.append((comp_name, change, change_pct))
+                                elif last_val < 2.5:  # Below emerging level
+                                    needs_attention.append((comp_name, last_val, change))
+                        
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            if trending_up:
+                                st.markdown("""
+                                <div style="background: #d4edda; padding: 15px; border-radius: 8px; border-left: 4px solid #28a745;">
+                                    <h4 style="color: #155724; margin-top: 0; margin-bottom: 12px;">📈 Trending Upward</h4>
+                                """, unsafe_allow_html=True)
+                                for comp_name, change, change_pct in sorted(trending_up, key=lambda x: x[1], reverse=True):
+                                    st.markdown(f"""
+                                    <div style="margin: 8px 0; padding-left: 10px;">
+                                        <span style="color: #28a745; font-size: 1.2rem; margin-right: 8px;">●</span>
+                                        <strong style="color: #155724;">{comp_name}</strong>: 
+                                        <span style="color: #28a745; font-weight: 600;">+{change:.1f} points</span> 
+                                        <span style="color: #666;">(+{change_pct:.0f}%)</span>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                                st.markdown("</div>", unsafe_allow_html=True)
+                            else:
+                                st.info("No significant improvements detected")
+                        
+                        with col2:
+                            if needs_attention:
+                                st.markdown("""
+                                <div style="background: #fff3cd; padding: 15px; border-radius: 8px; border-left: 4px solid #ffc107;">
+                                    <h4 style="color: #856404; margin-top: 0; margin-bottom: 12px;">⚠️ Needs Attention</h4>
+                                """, unsafe_allow_html=True)
+                                for comp_name, score, change in sorted(needs_attention, key=lambda x: x[1]):
+                                    st.markdown(f"""
+                                    <div style="margin: 8px 0; padding-left: 10px;">
+                                        <span style="color: #ffc107; font-size: 1.2rem; margin-right: 8px;">●</span>
+                                        <strong style="color: #856404;">{comp_name}</strong>: 
+                                        <span style="color: #dc3545; font-weight: 600;">{score:.1f}/5.0</span> 
+                                        <span style="color: #666;">({change:+.1f} change)</span>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                                st.markdown("</div>", unsafe_allow_html=True)
+                            else:
+                                st.success("All components performing well!")
+                    
+                    # Add Actionable Recommendations for Encounter
+                    st.markdown("---")
+                    st.markdown("""
+                    <h2 style="color: #ffffff; font-size: 2rem; margin-bottom: 5px;">
+                        💡 Actionable Recommendations - Encounter Assessment
+                    </h2>
+                    """, unsafe_allow_html=True)
+                    st.caption("🎯 Prioritized recommendations based on encounter performance")
+                    
+                    recommendations = []
+                    
+                    # Analyze each component and provide specific recommendations
+                    for comp_name, col_name in encounter_components.items():
+                        if col_name in filtered_encounter.columns:
+                            comp_scores = (filtered_encounter[col_name].values * 4.5)
+                            comp_mean = np.mean(comp_scores)
+                            comp_completion = (comp_scores > 0).sum() / len(comp_scores)
+                            
+                            if comp_mean < 3.0 or comp_completion < 0.7:
+                                if comp_name == "Chief Complaint":
+                                    recommendations.append({
+                                        'priority': 'High' if comp_mean < 2.0 else 'Medium',
+                                        'icon': '📋',
+                                        'title': 'Chief Complaint',
+                                        'text': 'Start every encounter by clearly identifying and documenting the primary reason for the visit.'
+                                    })
+                                elif comp_name == "HPI":
+                                    recommendations.append({
+                                        'priority': 'High' if comp_mean < 2.0 else 'Medium',
+                                        'icon': '📝',
+                                        'title': 'HPI (History of Present Illness)',
+                                        'text': 'Use OLDCARTS framework: Onset, Location, Duration, Character, Aggravating/Alleviating factors, Radiation, Timing, Severity.'
+                                    })
+                                elif comp_name == "PMH":
+                                    recommendations.append({
+                                        'priority': 'High' if comp_mean < 2.0 else 'Medium',
+                                        'icon': '📁',
+                                        'title': 'PMH (Past Medical History)',
+                                        'text': 'Always ask about chronic conditions, previous surgeries, hospitalizations, and current medications.'
+                                    })
+                                elif comp_name == "Family/Social History":
+                                    recommendations.append({
+                                        'priority': 'High' if comp_mean < 2.0 else 'Medium',
+                                        'icon': '👨‍👩‍👧‍👦',
+                                        'title': 'Family/Social History',
+                                        'text': 'Inquire about family health patterns, living situation, occupation, and lifestyle factors.'
+                                    })
+                                elif comp_name == "ROS":
+                                    recommendations.append({
+                                        'priority': 'High' if comp_mean < 2.0 else 'Medium',
+                                        'icon': '🔍',
+                                        'title': 'ROS (Review of Systems)',
+                                        'text': 'Conduct systematic review of systems to catch important missed symptoms across all body systems.'
+                                    })
+                    
+                    if recommendations:
+                        for rec in sorted(recommendations, key=lambda x: x['priority']):
+                            priority_color = '#dc3545' if rec['priority'] == 'High' else '#ffc107'
+                            priority_icon = '🔴' if rec['priority'] == 'High' else '🟡'
+                            
+                            st.markdown(f"""
+                            <div style="padding: 15px; margin: 10px 0; border-left: 4px solid {priority_color}; background: #f8f9fa; border-radius: 5px;">
+                                <div style="display: flex; align-items: center; margin-bottom: 8px;">
+                                    <span style="font-size: 1.5rem; margin-right: 10px;">{rec['icon']}</span>
+                                    <strong style="font-size: 1.1rem;">{rec['title']}</strong>
+                                    <span style="margin-left: auto; background: {priority_color}; color: white; padding: 4px 12px; border-radius: 12px; font-size: 0.85rem; font-weight: 600;">{priority_icon} {rec['priority']} Priority</span>
+                                </div>
+                                <div style="color: #555; line-height: 1.6;">→ {rec['text']}</div>
+                                <div style="color: #888; font-size: 0.9rem; margin-top: 5px;">Category: Encounter Assessment</div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                    else:
+                        st.success("✓ All encounter components are performing well! Continue your excellent work.")
+                    
+                    # Add Practice Suggestions for Encounter
+                    st.markdown("---")
+                    st.markdown("""
+                    <h2 style="color: #ffffff; font-size: 2rem; margin-bottom: 5px;">
+                        📚 Practice Suggestions - Encounter Assessment
+                    </h2>
+                    """, unsafe_allow_html=True)
+                    st.caption("🎯 Targeted practice activities for encounter documentation")
+                    
+                    # Provide practice suggestions based on weakest areas
+                    practice_suggestions = []
+                    
+                    for comp_name, col_name in encounter_components.items():
+                        if col_name in filtered_encounter.columns:
+                            comp_mean = np.mean((filtered_encounter[col_name].values * 4.5))
+                            
+                            if comp_mean < 3.5:
+                                if comp_name == "Chief Complaint":
+                                    practice_suggestions.append({
+                                        'icon': '📋',
+                                        'title': 'Chief Complaint Mastery',
+                                        'text': 'Practice documenting chief complaints using patient\'s own words. Review 5 sample encounters and identify the primary concern.'
+                                    })
+                                elif comp_name == "HPI":
+                                    practice_suggestions.append({
+                                        'icon': '📝',
+                                        'title': 'OLDCARTS Framework',
+                                        'text': 'Create flashcards for each OLDCARTS element. Practice with case studies ensuring you cover all components systematically.'
+                                    })
+                                elif comp_name == "PMH":
+                                    practice_suggestions.append({
+                                        'icon': '📁',
+                                        'title': 'Medical History Inquiry',
+                                        'text': 'Develop a standard checklist for past medical history. Practice with standardized patients focusing on chronic conditions and medications.'
+                                    })
+                                elif comp_name == "Family/Social History":
+                                    practice_suggestions.append({
+                                        'icon': '👨‍👩‍👧‍👦',
+                                        'title': 'Social Context Assessment',
+                                        'text': 'Role-play scenarios exploring family health patterns and social determinants of health. Focus on building rapport while gathering sensitive information.'
+                                    })
+                                elif comp_name == "ROS":
+                                    practice_suggestions.append({
+                                        'icon': '🔍',
+                                        'title': 'Systems Review Practice',
+                                        'text': 'Use systematic review checklists covering all body systems. Time yourself to ensure thorough yet efficient assessment.'
+                                    })
+                    
+                    if practice_suggestions:
+                        for idx, suggestion in enumerate(practice_suggestions, 1):
+                            st.markdown(f"""
+                            <div style="padding: 15px; margin: 10px 0; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                                <div style="display: flex; align-items: center; margin-bottom: 8px;">
+                                    <span style="font-size: 1.5rem; margin-right: 10px;">{suggestion['icon']}</span>
+                                    <strong style="font-size: 1.1rem; color: #2c3e50;">{suggestion['title']}</strong>
+                                </div>
+                                <div style="color: #555; line-height: 1.6; padding-left: 35px;">{suggestion['text']}</div>
+                                <div style="color: #888; font-size: 0.9rem; margin-top: 8px; padding-left: 35px;">Category: Encounter</div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                    else:
+                        st.info("💪 Your encounter assessment skills are strong. Continue practicing to maintain proficiency!")
         
         # ===== SECTION 2: SOCRATIC DIALOGUE COMPONENTS =====
         elif chart_selection == "Socratic Dialogue Components":
@@ -714,7 +1026,7 @@ with tab2:
                 with col1:
                     filter_type_soc = st.radio(
                         "Filter type",
-                        options=["All", "Last 5", "Individual attempt(s)"],
+                        options=["All", "Last 5", "Attempt range"],
                         key=f"filter_type_{selected_student}_socratic",
                         label_visibility="collapsed",
                         horizontal=False
@@ -727,15 +1039,20 @@ with tab2:
                     elif filter_type_soc == "Last 5":
                         selected_soc_attempt_nums = unique_soc_attempts[-5:] if len(unique_soc_attempts) >= 5 else unique_soc_attempts
                         st.info(f"Showing last {len(selected_soc_attempt_nums)} attempt(s): {', '.join(map(str, selected_soc_attempt_nums))}")
-                    else:  # Individual attempt(s)
-                        selected_soc_attempt_nums = st.multiselect(
-                            label="Choose which attempts to display",
-                            options=unique_soc_attempts,
-                            default=unique_soc_attempts,
-                            key=f"attempt_multiselect_{selected_student}_socratic",
-                            label_visibility="collapsed",
-                            help="Select one or more attempts to display on the graph"
-                        )
+                    else:  # Attempt range
+                        if len(unique_soc_attempts) > 1:
+                            range_values = st.slider(
+                                "Select attempt range",
+                                min_value=int(min(unique_soc_attempts)),
+                                max_value=int(max(unique_soc_attempts)),
+                                value=(int(min(unique_soc_attempts)), int(max(unique_soc_attempts))),
+                                key=f"attempt_range_{selected_student}_socratic",
+                                help="Drag to select a range of attempts"
+                            )
+                            selected_soc_attempt_nums = [a for a in unique_soc_attempts if range_values[0] <= a <= range_values[1]]
+                        else:
+                            selected_soc_attempt_nums = unique_soc_attempts
+                            st.info(f"Only 1 attempt available")
                 
                 fig_soc = go.Figure()
                 
@@ -878,8 +1195,315 @@ with tab2:
                                     st.info(f"➡️ No change: {improvement:.2f} points")
                         else:
                             st.info("Please select at least one attempt to view statistics")
-                else:
-                    st.info("Socratic component data not available for this student/iteration")
+                
+                # Add Socratic-specific Performance Summary
+                st.markdown("---")
+                st.markdown("### 📊 Socratic Dialogue Performance Summary")
+                
+                if len(selected_soc_attempt_nums) > 0:
+                    filtered_socratic = student_soc[student_soc['attempt'].isin(selected_soc_attempt_nums)]
+                    
+                    # Calculate Socratic-specific statistics
+                    socratic_scores = []
+                    for col_name in component_cols:
+                        if col_name in filtered_socratic.columns:
+                            socratic_scores.extend(filtered_socratic[col_name].dropna().tolist())
+                    
+                    if socratic_scores:
+                        soc_mean = np.mean(socratic_scores)
+                        soc_std = np.std(socratic_scores, ddof=1) if len(socratic_scores) > 1 else 0
+                        
+                        # Performance level
+                        if soc_mean >= 4.1:
+                            perf_level = "Advanced"
+                            perf_color = "#28a745"
+                        elif soc_mean >= 3.1:
+                            perf_level = "Proficient"
+                            perf_color = "#17a2b8"
+                        elif soc_mean >= 2.1:
+                            perf_level = "Emerging"
+                            perf_color = "#ff9800"
+                        else:
+                            perf_level = "Developing"
+                            perf_color = "#dc3545"
+                        
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.markdown(f"""
+                            <div style="padding: 20px; border-radius: 10px; background: linear-gradient(135deg, {perf_color}22 0%, {perf_color}11 100%); border-left: 4px solid {perf_color}; text-align: center;">
+                                <div style="font-size: 1.1rem; color: #666; margin-bottom: 10px;">💬 Overall Score</div>
+                                <div style="font-size: 2.5rem; font-weight: bold; color: {perf_color};">{soc_mean:.1f}<span style="font-size: 1.5rem; color: #888;">/5.0</span></div>
+                                <div style="font-size: 0.9rem; color: #888; margin-top: 5px;">±{soc_std:.2f} std dev</div>
+                                <div style="margin-top: 10px; padding: 8px; background: {perf_color}; color: white; border-radius: 20px; font-weight: 600;">{perf_level}</div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        
+                        with col2:
+                            st.metric("📊 Attempts Analyzed", len(selected_soc_attempt_nums))
+                            st.metric("📈 Components Tracked", len(component_names))
+                        
+                        with col3:
+                            # Calculate average score per component
+                            avg_per_component = soc_mean
+                            st.metric("📊 Avg per Component", f"{avg_per_component:.2f}/5.0")
+                            
+                            # Trend
+                            if len(selected_soc_attempt_nums) >= 2:
+                                first_scores = []
+                                last_scores = []
+                                first_attempt = min(selected_soc_attempt_nums)
+                                last_attempt = max(selected_soc_attempt_nums)
+                                
+                                for col_name in component_cols:
+                                    if col_name in filtered_socratic.columns:
+                                        first_vals = filtered_socratic[filtered_socratic['attempt'] == first_attempt][col_name].dropna().tolist()
+                                        last_vals = filtered_socratic[filtered_socratic['attempt'] == last_attempt][col_name].dropna().tolist()
+                                        if first_vals and last_vals:
+                                            first_scores.append(first_vals[0])
+                                            last_scores.append(last_vals[0])
+                                
+                                if first_scores and last_scores:
+                                    trend = np.mean(last_scores) - np.mean(first_scores)
+                                    if trend > 0:
+                                        st.metric("📈 Overall Trend", f"+{trend:.2f}", delta=f"+{trend:.2f}")
+                                    elif trend < 0:
+                                        st.metric("📉 Overall Trend", f"{trend:.2f}", delta=f"{trend:.2f}")
+                                    else:
+                                        st.metric("➡️ Overall Trend", "Stable")
+                        
+                        st.markdown("#### 🎯 Socratic Component Performance Breakdown")
+                        
+                        # Component-specific breakdown
+                        for comp_name, col_name in socratic_components.items():
+                            if col_name in filtered_socratic.columns:
+                                comp_scores = filtered_socratic[col_name].dropna().values
+                                if len(comp_scores) > 0:
+                                    comp_mean = np.mean(comp_scores)
+                                    
+                                    col_a, col_b = st.columns([3, 1])
+                                    with col_a:
+                                        # Match score card thresholds: Advanced (4.1+), Proficient (3.1+), Emerging (2.1+), Developing (<2.1)
+                                        if comp_mean >= 4.1:
+                                            st.markdown(f"<div style='padding: 10px; background: #d4edda; border-left: 4px solid #28a745; border-radius: 5px; color: #155724;'>✓ <strong>{comp_name}</strong>: {comp_mean:.2f}/5.0 - <span style='color: #28a745; font-weight: 600;'>Advanced</span></div>", unsafe_allow_html=True)
+                                        elif comp_mean >= 3.1:
+                                            st.markdown(f"<div style='padding: 10px; background: #d1ecf1; border-left: 4px solid #17a2b8; border-radius: 5px; color: #0c5460;'>✓ <strong>{comp_name}</strong>: {comp_mean:.2f}/5.0 - <span style='color: #17a2b8; font-weight: 600;'>Proficient</span></div>", unsafe_allow_html=True)
+                                        elif comp_mean >= 2.1:
+                                            st.markdown(f"<div style='padding: 10px; background: #fff3cd; border-left: 4px solid #ff9800; border-radius: 5px; color: #856404;'>⚠ <strong>{comp_name}</strong>: {comp_mean:.2f}/5.0 - <span style='color: #ff9800; font-weight: 600;'>Emerging</span></div>", unsafe_allow_html=True)
+                                        else:
+                                            st.markdown(f"<div style='padding: 10px; background: #f8d7da; border-left: 4px solid #dc3545; border-radius: 5px; color: #721c24;'>⚠ <strong>{comp_name}</strong>: {comp_mean:.2f}/5.0 - <span style='color: #dc3545; font-weight: 600;'>Developing</span></div>", unsafe_allow_html=True)
+                                    with col_b:
+                                        if len(selected_soc_attempt_nums) >= 2:
+                                            first_val = filtered_socratic[filtered_socratic['attempt'] == min(selected_soc_attempt_nums)][col_name].dropna().values
+                                            last_val = filtered_socratic[filtered_socratic['attempt'] == max(selected_soc_attempt_nums)][col_name].dropna().values
+                                            if len(first_val) > 0 and len(last_val) > 0:
+                                                change = last_val[0] - first_val[0]
+                                                if change > 0:
+                                                    st.markdown(f"<div style='text-align: right; color: #28a745;'>↗️ +{change:.2f}</div>", unsafe_allow_html=True)
+                                                elif change < 0:
+                                                    st.markdown(f"<div style='text-align: right; color: #dc3545;'>↘️ {change:.2f}</div>", unsafe_allow_html=True)
+                                                else:
+                                                    st.markdown(f"<div style='text-align: right; color: #888;'>→ 0.0</div>", unsafe_allow_html=True)
+                        
+                        # Add Key Observations for Socratic
+                        st.markdown("---")
+                        st.markdown("""
+                        <h2 style="color: #ffffff; font-size: 2rem; margin-bottom: 10px;">
+                            🔍 Key Observations - Socratic Dialogue
+                        </h2>
+                        """, unsafe_allow_html=True)
+                        
+                        if len(selected_soc_attempt_nums) >= 2:
+                            trending_up = []
+                            needs_attention = []
+                            
+                            for comp_name, col_name in socratic_components.items():
+                                if col_name in filtered_socratic.columns:
+                                    first_val = filtered_socratic[filtered_socratic['attempt'] == min(selected_soc_attempt_nums)][col_name].dropna().values
+                                    last_val = filtered_socratic[filtered_socratic['attempt'] == max(selected_soc_attempt_nums)][col_name].dropna().values
+                                    
+                                    if len(first_val) > 0 and len(last_val) > 0:
+                                        change = last_val[0] - first_val[0]
+                                        change_pct = (change / 5.0) * 100
+                                        
+                                        if change > 0:
+                                            trending_up.append((comp_name, change, change_pct))
+                                        elif last_val[0] < 2.5:
+                                            needs_attention.append((comp_name, last_val[0], change))
+                            
+                            col1, col2 = st.columns(2)
+                            
+                            with col1:
+                                if trending_up:
+                                    st.markdown("""
+                                    <div style="background: #d4edda; padding: 15px; border-radius: 8px; border-left: 4px solid #28a745;">
+                                        <h4 style="color: #155724; margin-top: 0; margin-bottom: 12px;">📈 Trending Upward</h4>
+                                    """, unsafe_allow_html=True)
+                                    for comp_name, change, change_pct in sorted(trending_up, key=lambda x: x[1], reverse=True):
+                                        st.markdown(f"""
+                                        <div style="margin: 8px 0; padding-left: 10px;">
+                                            <span style="color: #28a745; font-size: 1.2rem; margin-right: 8px;">●</span>
+                                            <strong style="color: #155724;">{comp_name}</strong>: 
+                                            <span style="color: #28a745; font-weight: 600;">+{change:.2f} points</span> 
+                                            <span style="color: #666;">(+{change_pct:.0f}%)</span>
+                                        </div>
+                                        """, unsafe_allow_html=True)
+                                    st.markdown("</div>", unsafe_allow_html=True)
+                                else:
+                                    st.info("No significant improvements detected")
+                            
+                            with col2:
+                                if needs_attention:
+                                    st.markdown("""
+                                    <div style="background: #fff3cd; padding: 15px; border-radius: 8px; border-left: 4px solid #ffc107;">
+                                        <h4 style="color: #856404; margin-top: 0; margin-bottom: 12px;">⚠️ Needs Attention</h4>
+                                    """, unsafe_allow_html=True)
+                                    for comp_name, score, change in sorted(needs_attention, key=lambda x: x[1]):
+                                        st.markdown(f"""
+                                        <div style="margin: 8px 0; padding-left: 10px;">
+                                            <span style="color: #ffc107; font-size: 1.2rem; margin-right: 8px;">●</span>
+                                            <strong style="color: #856404;">{comp_name}</strong>: 
+                                            <span style="color: #dc3545; font-weight: 600;">{score:.2f}/5.0</span> 
+                                            <span style="color: #666;">({change:+.2f} change)</span>
+                                        </div>
+                                        """, unsafe_allow_html=True)
+                                    st.markdown("</div>", unsafe_allow_html=True)
+                                else:
+                                    st.success("All components performing well!")
+                        
+                        # Add Actionable Recommendations for Socratic
+                        st.markdown("---")
+                        st.markdown("""
+                        <h2 style="color: #ffffff; font-size: 2rem; margin-bottom: 5px;">
+                            💡 Actionable Recommendations - Socratic Dialogue
+                        </h2>
+                        """, unsafe_allow_html=True)
+                        st.caption("🎯 Prioritized recommendations based on Socratic dialogue performance")
+                        
+                        recommendations = []
+                        
+                        for comp_name, col_name in socratic_components.items():
+                            if col_name in filtered_socratic.columns:
+                                comp_scores = filtered_socratic[col_name].dropna().values
+                                if len(comp_scores) > 0:
+                                    comp_mean = np.mean(comp_scores)
+                                    
+                                    if comp_mean < 3.0:
+                                        if comp_name == "WONDER":
+                                            recommendations.append({
+                                                'priority': 'High' if comp_mean < 2.0 else 'Medium',
+                                                'icon': '❓',
+                                                'title': 'Question Depth (WONDER)',
+                                                'text': 'Practice asking follow-up questions that explore patient concerns, beliefs, and understanding. Move beyond surface-level inquiries.'
+                                            })
+                                        elif comp_name == "REFLECT":
+                                            recommendations.append({
+                                                'priority': 'High' if comp_mean < 2.0 else 'Medium',
+                                                'icon': '👂',
+                                                'title': 'Response Completeness (REFLECT)',
+                                                'text': 'Work on active listening. Pause after patient responses and acknowledge what you heard before moving forward.'
+                                            })
+                                        elif comp_name == "REFINE":
+                                            recommendations.append({
+                                                'priority': 'High' if comp_mean < 2.0 else 'Medium',
+                                                'icon': '🤔',
+                                                'title': 'Assumption Recognition (REFINE)',
+                                                'text': 'Identify and address your own assumptions. Ask: "What am I assuming?" and "How can I verify this?"'
+                                            })
+                                        elif comp_name == "RESTATE":
+                                            recommendations.append({
+                                                'priority': 'High' if comp_mean < 2.0 else 'Medium',
+                                                'icon': '🔄',
+                                                'title': 'Plan Flexibility (RESTATE)',
+                                                'text': 'Include the patient in decision-making. Use collaborative language: "What do you think?" and "Does this work for you?"'
+                                            })
+                                        elif comp_name == "REPEAT":
+                                            recommendations.append({
+                                                'priority': 'High' if comp_mean < 2.0 else 'Medium',
+                                                'icon': '⚡',
+                                                'title': 'In-Encounter Adjustment (REPEAT)',
+                                                'text': 'Be flexible during encounters. Adapt your approach based on patient responses and evolving information.'
+                                            })
+                        
+                        if recommendations:
+                            for rec in sorted(recommendations, key=lambda x: x['priority']):
+                                priority_color = '#dc3545' if rec['priority'] == 'High' else '#ffc107'
+                                priority_icon = '🔴' if rec['priority'] == 'High' else '🟡'
+                                
+                                st.markdown(f"""
+                                <div style="padding: 15px; margin: 10px 0; border-left: 4px solid {priority_color}; background: #f8f9fa; border-radius: 5px;">
+                                    <div style="display: flex; align-items: center; margin-bottom: 8px;">
+                                        <span style="font-size: 1.5rem; margin-right: 10px;">{rec['icon']}</span>
+                                        <strong style="font-size: 1.1rem;">{rec['title']}</strong>
+                                        <span style="margin-left: auto; background: {priority_color}; color: white; padding: 4px 12px; border-radius: 12px; font-size: 0.85rem; font-weight: 600;">{priority_icon} {rec['priority']} Priority</span>
+                                    </div>
+                                    <div style="color: #555; line-height: 1.6;">→ {rec['text']}</div>
+                                    <div style="color: #888; font-size: 0.9rem; margin-top: 5px;">Category: Socratic Dialogue</div>
+                                </div>
+                                """, unsafe_allow_html=True)
+                        else:
+                            st.success("✓ All Socratic dialogue components are strong! Continue your excellent work.")
+                        
+                        # Add Practice Suggestions for Socratic
+                        st.markdown("---")
+                        st.markdown("""
+                        <h2 style="color: #ffffff; font-size: 2rem; margin-bottom: 5px;">
+                            📚 Practice Suggestions - Socratic Dialogue
+                        </h2>
+                        """, unsafe_allow_html=True)
+                        st.caption("🎯 Targeted practice activities for Socratic dialogue skills")
+                        
+                        practice_suggestions = []
+                        
+                        for comp_name, col_name in socratic_components.items():
+                            if col_name in filtered_socratic.columns:
+                                comp_mean = np.mean(filtered_socratic[col_name].dropna().values)
+                                
+                                if comp_mean < 3.5:
+                                    if comp_name == "WONDER":
+                                        practice_suggestions.append({
+                                            'icon': '❓',
+                                            'title': 'Deep Questioning',
+                                            'text': 'Review the Socratic questioning framework. Practice moving from surface-level to deeper exploratory questions. Use "Why?", "What if?", and "How do you know?"'
+                                        })
+                                    elif comp_name == "REFLECT":
+                                        practice_suggestions.append({
+                                            'icon': '👂',
+                                            'title': 'Active Listening',
+                                            'text': 'Record yourself and review how completely you address patient concerns. Practice summarizing what you heard before responding.'
+                                        })
+                                    elif comp_name == "REFINE":
+                                        practice_suggestions.append({
+                                            'icon': '🤔',
+                                            'title': 'Assumption Challenge',
+                                            'text': 'Keep a reflective journal documenting assumptions made during encounters. Review and identify patterns in your thinking.'
+                                        })
+                                    elif comp_name == "RESTATE":
+                                        practice_suggestions.append({
+                                            'icon': '🔄',
+                                            'title': 'Collaborative Planning',
+                                            'text': 'Practice shared decision-making. Always ask: "What do you think?" and "Does this work for you?" Role-play with peers.'
+                                        })
+                                    elif comp_name == "REPEAT":
+                                        practice_suggestions.append({
+                                            'icon': '⚡',
+                                            'title': 'Adaptive Flexibility',
+                                            'text': 'Watch recorded encounters and identify moments requiring adaptation. Practice pivoting strategies mid-conversation.'
+                                        })
+                        
+                        if practice_suggestions:
+                            for suggestion in practice_suggestions:
+                                st.markdown(f"""
+                                <div style="padding: 15px; margin: 10px 0; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                                    <div style="display: flex; align-items: center; margin-bottom: 8px;">
+                                        <span style="font-size: 1.5rem; margin-right: 10px;">{suggestion['icon']}</span>
+                                        <strong style="font-size: 1.1rem; color: #2c3e50;">{suggestion['title']}</strong>
+                                    </div>
+                                    <div style="color: #555; line-height: 1.6; padding-left: 35px;">{suggestion['text']}</div>
+                                    <div style="color: #888; font-size: 0.9rem; margin-top: 8px; padding-left: 35px;">Category: Socratic</div>
+                                </div>
+                                """, unsafe_allow_html=True)
+                        else:
+                            st.info("💪 Your Socratic dialogue skills are excellent. Continue practicing to maintain mastery!")
             else:
                 st.info("Socratic component data not available for this student/iteration")
         
@@ -913,7 +1537,7 @@ with tab2:
                 with col1:
                     filter_type_speech = st.radio(
                         "Filter type",
-                        options=["All", "Last 5", "Individual attempt(s)"],
+                        options=["All", "Last 5", "Attempt range"],
                         key=f"filter_type_{selected_student}_speech",
                         label_visibility="collapsed",
                         horizontal=False
@@ -926,15 +1550,20 @@ with tab2:
                     elif filter_type_speech == "Last 5":
                         selected_speech_attempt_nums = unique_speech_attempts[-5:] if len(unique_speech_attempts) >= 5 else unique_speech_attempts
                         st.info(f"Showing last {len(selected_speech_attempt_nums)} attempt(s): {', '.join(map(str, selected_speech_attempt_nums))}")
-                    else:  # Individual attempt(s)
-                        selected_speech_attempt_nums = st.multiselect(
-                            label="Choose which attempts to display",
-                            options=unique_speech_attempts,
-                            default=unique_speech_attempts,
-                            key=f"attempt_multiselect_{selected_student}_speech",
-                            label_visibility="collapsed",
-                            help="Select one or more attempts to display on the graph"
-                        )
+                    else:  # Attempt range
+                        if len(unique_speech_attempts) > 1:
+                            range_values = st.slider(
+                                "Select attempt range",
+                                min_value=int(min(unique_speech_attempts)),
+                                max_value=int(max(unique_speech_attempts)),
+                                value=(int(min(unique_speech_attempts)), int(max(unique_speech_attempts))),
+                                key=f"attempt_range_{selected_student}_speech",
+                                help="Drag to select a range of attempts"
+                            )
+                            selected_speech_attempt_nums = [a for a in unique_speech_attempts if range_values[0] <= a <= range_values[1]]
+                        else:
+                            selected_speech_attempt_nums = unique_speech_attempts
+                            st.info(f"Only 1 attempt available")
                 
                 fig_speech = go.Figure()
                 
@@ -1077,6 +1706,305 @@ with tab2:
                                     st.info(f"➡️ No change: {improvement:.2f} points")
                     
                     st.caption("ℹ️ Speech quality assessed from encounter recording")
+                
+                # Add Speech-specific Performance Summary
+                st.markdown("---")
+                st.markdown("### 📊 Speech Quality Performance Summary")
+                
+                if len(selected_speech_attempt_nums) > 0:
+                    filtered_speech = student_soc[student_soc['attempt'].isin(selected_speech_attempt_nums)]
+                    
+                    # Calculate Speech-specific statistics
+                    speech_scores = []
+                    for col_name in metric_cols:
+                        if col_name in filtered_speech.columns:
+                            speech_scores.extend(filtered_speech[col_name].dropna().tolist())
+                    
+                    if speech_scores:
+                        speech_mean = np.mean(speech_scores)
+                        speech_std = np.std(speech_scores, ddof=1) if len(speech_scores) > 1 else 0
+                        
+                        # Performance level (out of 10)
+                        if speech_mean >= 8.2:
+                            perf_level = "Advanced"
+                            perf_color = "#28a745"
+                        elif speech_mean >= 6.2:
+                            perf_level = "Proficient"
+                            perf_color = "#17a2b8"
+                        elif speech_mean >= 4.2:
+                            perf_level = "Emerging"
+                            perf_color = "#ff9800"
+                        else:
+                            perf_level = "Developing"
+                            perf_color = "#dc3545"
+                        
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.markdown(f"""
+                            <div style="padding: 20px; border-radius: 10px; background: linear-gradient(135deg, {perf_color}22 0%, {perf_color}11 100%); border-left: 4px solid {perf_color}; text-align: center;">
+                                <div style="font-size: 1.1rem; color: #666; margin-bottom: 10px;">🎙️ Overall Score</div>
+                                <div style="font-size: 2.5rem; font-weight: bold; color: {perf_color};">{speech_mean:.1f}<span style="font-size: 1.5rem; color: #888;">/10.0</span></div>
+                                <div style="font-size: 0.9rem; color: #888; margin-top: 5px;">±{speech_std:.2f} std dev</div>
+                                <div style="margin-top: 10px; padding: 8px; background: {perf_color}; color: white; border-radius: 20px; font-weight: 600;">{perf_level}</div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        
+                        with col2:
+                            st.metric("📊 Attempts Analyzed", len(selected_speech_attempt_nums))
+                            st.metric("📈 Metrics Tracked", len(metric_names))
+                        
+                        with col3:
+                            # Calculate percentage score
+                            percentage_score = (speech_mean / 10.0) * 100
+                            st.metric("📊 Overall Percentage", f"{percentage_score:.1f}%")
+                            
+                            # Trend
+                            if len(selected_speech_attempt_nums) >= 2:
+                                first_scores = []
+                                last_scores = []
+                                first_attempt = min(selected_speech_attempt_nums)
+                                last_attempt = max(selected_speech_attempt_nums)
+                                
+                                for col_name in metric_cols:
+                                    if col_name in filtered_speech.columns:
+                                        first_vals = filtered_speech[filtered_speech['attempt'] == first_attempt][col_name].dropna().tolist()
+                                        last_vals = filtered_speech[filtered_speech['attempt'] == last_attempt][col_name].dropna().tolist()
+                                        if first_vals and last_vals:
+                                            first_scores.append(first_vals[0])
+                                            last_scores.append(last_vals[0])
+                                
+                                if first_scores and last_scores:
+                                    trend = np.mean(last_scores) - np.mean(first_scores)
+                                    trend_pct = (trend / 10.0) * 100
+                                    if trend > 0:
+                                        st.metric("📈 Overall Trend", f"+{trend:.2f}", delta=f"+{trend_pct:.1f}%")
+                                    elif trend < 0:
+                                        st.metric("📉 Overall Trend", f"{trend:.2f}", delta=f"{trend_pct:.1f}%")
+                                    else:
+                                        st.metric("➡️ Overall Trend", "Stable")
+                        
+                        st.markdown("#### 🎯 Speech Metric Performance Breakdown")
+                        
+                        # Metric-specific breakdown
+                        for metric_name, col_name in speech_metrics.items():
+                            if col_name in filtered_speech.columns:
+                                metric_scores = filtered_speech[col_name].dropna().values
+                                if len(metric_scores) > 0:
+                                    metric_mean = np.mean(metric_scores)
+                                    metric_pct = (metric_mean / 10.0) * 100
+                                    
+                                    col_a, col_b = st.columns([3, 1])
+                                    with col_a:
+                                        # Match score card thresholds (adjusted for 0-10 scale): Advanced (8.2+), Proficient (6.2+), Emerging (4.2+), Developing (<4.2)
+                                        if metric_mean >= 8.2:
+                                            st.markdown(f"<div style='padding: 10px; background: #d4edda; border-left: 4px solid #28a745; border-radius: 5px; color: #155724;'>✓ <strong>{metric_name}</strong>: {metric_mean:.1f}/10.0 ({metric_pct:.0f}%) - <span style='color: #28a745; font-weight: 600;'>Advanced</span></div>", unsafe_allow_html=True)
+                                        elif metric_mean >= 6.2:
+                                            st.markdown(f"<div style='padding: 10px; background: #d1ecf1; border-left: 4px solid #17a2b8; border-radius: 5px; color: #0c5460;'>✓ <strong>{metric_name}</strong>: {metric_mean:.1f}/10.0 ({metric_pct:.0f}%) - <span style='color: #17a2b8; font-weight: 600;'>Proficient</span></div>", unsafe_allow_html=True)
+                                        elif metric_mean >= 4.2:
+                                            st.markdown(f"<div style='padding: 10px; background: #fff3cd; border-left: 4px solid #ff9800; border-radius: 5px; color: #856404;'>⚠ <strong>{metric_name}</strong>: {metric_mean:.1f}/10.0 ({metric_pct:.0f}%) - <span style='color: #ff9800; font-weight: 600;'>Emerging</span></div>", unsafe_allow_html=True)
+                                        else:
+                                            st.markdown(f"<div style='padding: 10px; background: #f8d7da; border-left: 4px solid #dc3545; border-radius: 5px; color: #721c24;'>⚠ <strong>{metric_name}</strong>: {metric_mean:.1f}/10.0 ({metric_pct:.0f}%) - <span style='color: #dc3545; font-weight: 600;'>Developing</span></div>", unsafe_allow_html=True)
+                                    with col_b:
+                                        if len(selected_speech_attempt_nums) >= 2:
+                                            first_val = filtered_speech[filtered_speech['attempt'] == min(selected_speech_attempt_nums)][col_name].dropna().values
+                                            last_val = filtered_speech[filtered_speech['attempt'] == max(selected_speech_attempt_nums)][col_name].dropna().values
+                                            if len(first_val) > 0 and len(last_val) > 0:
+                                                change = last_val[0] - first_val[0]
+                                                change_pct = (change / 10.0) * 100
+                                                if change > 0:
+                                                    st.markdown(f"<div style='text-align: right; color: #28a745;'>↗️ +{change:.1f} ({change_pct:+.0f}%)</div>", unsafe_allow_html=True)
+                                                elif change < 0:
+                                                    st.markdown(f"<div style='text-align: right; color: #dc3545;'>↘️ {change:.1f} ({change_pct:.0f}%)</div>", unsafe_allow_html=True)
+                                                else:
+                                                    st.markdown(f"<div style='text-align: right; color: #888;'>→ 0.0</div>", unsafe_allow_html=True)
+                        
+                        # Add Key Observations for Speech
+                        st.markdown("---")
+                        st.markdown("""
+                        <h2 style="color: #ffffff; font-size: 2rem; margin-bottom: 10px;">
+                            🔍 Key Observations - Speech Quality
+                        </h2>
+                        """, unsafe_allow_html=True)
+                        
+                        if len(selected_speech_attempt_nums) >= 2:
+                            trending_up = []
+                            needs_attention = []
+                            
+                            for metric_name, col_name in speech_metrics.items():
+                                if col_name in filtered_speech.columns:
+                                    first_val = filtered_speech[filtered_speech['attempt'] == min(selected_speech_attempt_nums)][col_name].dropna().values
+                                    last_val = filtered_speech[filtered_speech['attempt'] == max(selected_speech_attempt_nums)][col_name].dropna().values
+                                    
+                                    if len(first_val) > 0 and len(last_val) > 0:
+                                        change = last_val[0] - first_val[0]
+                                        change_pct = (change / 10.0) * 100
+                                        
+                                        if change > 0:
+                                            trending_up.append((metric_name, change, change_pct))
+                                        elif last_val[0] < 6.0:
+                                            needs_attention.append((metric_name, last_val[0], change))
+                            
+                            col1, col2 = st.columns(2)
+                            
+                            with col1:
+                                if trending_up:
+                                    st.markdown("""
+                                    <div style="background: #d4edda; padding: 15px; border-radius: 8px; border-left: 4px solid #28a745;">
+                                        <h4 style="color: #155724; margin-top: 0; margin-bottom: 12px;">📈 Trending Upward</h4>
+                                    """, unsafe_allow_html=True)
+                                    for metric_name, change, change_pct in sorted(trending_up, key=lambda x: x[1], reverse=True):
+                                        st.markdown(f"""
+                                        <div style="margin: 8px 0; padding-left: 10px;">
+                                            <span style="color: #28a745; font-size: 1.2rem; margin-right: 8px;">●</span>
+                                            <strong style="color: #155724;">{metric_name}</strong>: 
+                                            <span style="color: #28a745; font-weight: 600;">+{change:.1f} points</span> 
+                                            <span style="color: #666;">(+{change_pct:.0f}%)</span>
+                                        </div>
+                                        """, unsafe_allow_html=True)
+                                    st.markdown("</div>", unsafe_allow_html=True)
+                                else:
+                                    st.info("No significant improvements detected")
+                            
+                            with col2:
+                                if needs_attention:
+                                    st.markdown("""
+                                    <div style="background: #fff3cd; padding: 15px; border-radius: 8px; border-left: 4px solid #ffc107;">
+                                        <h4 style="color: #856404; margin-top: 0; margin-bottom: 12px;">⚠️ Needs Attention</h4>
+                                    """, unsafe_allow_html=True)
+                                    for metric_name, score, change in sorted(needs_attention, key=lambda x: x[1]):
+                                        st.markdown(f"""
+                                        <div style="margin: 8px 0; padding-left: 10px;">
+                                            <span style="color: #ffc107; font-size: 1.2rem; margin-right: 8px;">●</span>
+                                            <strong style="color: #856404;">{metric_name}</strong>: 
+                                            <span style="color: #dc3545; font-weight: 600;">{score:.1f}/10.0</span> 
+                                            <span style="color: #666;">({change:+.1f} change)</span>
+                                        </div>
+                                        """, unsafe_allow_html=True)
+                                    st.markdown("</div>", unsafe_allow_html=True)
+                                else:
+                                    st.success("All metrics performing well!")
+                        
+                        # Add Actionable Recommendations for Speech
+                        st.markdown("---")
+                        st.markdown("""
+                        <h2 style="color: #ffffff; font-size: 2rem; margin-bottom: 5px;">
+                            💡 Actionable Recommendations - Speech Quality
+                        </h2>
+                        """, unsafe_allow_html=True)
+                        st.caption("🎯 Prioritized recommendations based on speech performance")
+                        
+                        recommendations = []
+                        
+                        for metric_name, col_name in speech_metrics.items():
+                            if col_name in filtered_speech.columns:
+                                metric_scores = filtered_speech[col_name].dropna().values
+                                if len(metric_scores) > 0:
+                                    metric_mean = np.mean(metric_scores)
+                                    
+                                    if metric_mean < 7.0:
+                                        if metric_name == "Volume":
+                                            recommendations.append({
+                                                'priority': 'High' if metric_mean < 5.0 else 'Medium',
+                                                'icon': '🔊',
+                                                'title': 'Volume Control',
+                                                'text': 'Practice projecting your voice clearly. Record yourself and adjust volume to be audible without shouting. Maintain consistency throughout.'
+                                            })
+                                        elif metric_name == "Pace":
+                                            recommendations.append({
+                                                'priority': 'High' if metric_mean < 5.0 else 'Medium',
+                                                'icon': '⏩',
+                                                'title': 'Speaking Pace',
+                                                'text': 'Slow down deliberately. Practice reading aloud at 150-160 words per minute. Pause between sentences for patient comprehension.'
+                                            })
+                                        elif metric_name == "Pitch":
+                                            recommendations.append({
+                                                'priority': 'Medium',
+                                                'icon': '🎵',
+                                                'title': 'Pitch Variation',
+                                                'text': 'Vary your vocal pitch to maintain engagement. Avoid monotone delivery. Practice emphasizing key words naturally.'
+                                            })
+                                        elif metric_name == "Pauses":
+                                            recommendations.append({
+                                                'priority': 'High' if metric_mean < 5.0 else 'Medium',
+                                                'icon': '⏸️',
+                                                'title': 'Strategic Pauses',
+                                                'text': 'Use intentional pauses after questions and key information. Allow time for patient processing. Silence is powerful in communication.'
+                                            })
+                        
+                        if recommendations:
+                            for rec in sorted(recommendations, key=lambda x: x['priority']):
+                                priority_color = '#dc3545' if rec['priority'] == 'High' else '#ffc107'
+                                priority_icon = '🔴' if rec['priority'] == 'High' else '🟡'
+                                
+                                st.markdown(f"""
+                                <div style="padding: 15px; margin: 10px 0; border-left: 4px solid {priority_color}; background: #f8f9fa; border-radius: 5px;">
+                                    <div style="display: flex; align-items: center; margin-bottom: 8px;">
+                                        <span style="font-size: 1.5rem; margin-right: 10px;">{rec['icon']}</span>
+                                        <strong style="font-size: 1.1rem;">{rec['title']}</strong>
+                                        <span style="margin-left: auto; background: {priority_color}; color: white; padding: 4px 12px; border-radius: 12px; font-size: 0.85rem; font-weight: 600;">{priority_icon} {rec['priority']} Priority</span>
+                                    </div>
+                                    <div style="color: #555; line-height: 1.6;">→ {rec['text']}</div>
+                                    <div style="color: #888; font-size: 0.9rem; margin-top: 5px;">Category: Speech Quality</div>
+                                </div>
+                                """, unsafe_allow_html=True)
+                        else:
+                            st.success("✓ Speech quality is excellent across all metrics! Continue your outstanding communication.")
+                        
+                        # Add Practice Suggestions for Speech
+                        st.markdown("---")
+                        st.markdown("""
+                        <h2 style="color: #ffffff; font-size: 2rem; margin-bottom: 5px;">
+                            📚 Practice Suggestions - Speech Quality
+                        </h2>
+                        """, unsafe_allow_html=True)
+                        st.caption("🎯 Targeted practice activities for speech improvement")
+                        
+                        practice_suggestions = []
+                        
+                        for metric_name, col_name in speech_metrics.items():
+                            if col_name in filtered_speech.columns:
+                                metric_mean = np.mean(filtered_speech[col_name].dropna().values)
+                                
+                                if metric_mean < 7.5:
+                                    if metric_name == "Volume":
+                                        practice_suggestions.append({
+                                            'icon': '🔊',
+                                            'title': 'Volume Projection',
+                                            'text': 'Practice diaphragmatic breathing and voice projection. Record in different room sizes and adjust. Seek feedback on audibility.'
+                                        })
+                                    elif metric_name == "Pace":
+                                        practice_suggestions.append({
+                                            'icon': '⏩',
+                                            'title': 'Pacing Control',
+                                            'text': 'Practice speaking slowly with intentional pauses. Read aloud and time yourself to develop awareness. Use a metronome for consistent pacing.'
+                                        })
+                                    elif metric_name == "Pitch":
+                                        practice_suggestions.append({
+                                            'icon': '🎵',
+                                            'title': 'Vocal Variety',
+                                            'text': 'Record yourself reading passages with emotional content. Listen for monotone patterns and practice emphasizing key words with pitch changes.'
+                                        })
+                                    elif metric_name == "Pauses":
+                                        practice_suggestions.append({
+                                            'icon': '⏸️',
+                                            'title': 'Purposeful Pausing',
+                                            'text': 'Mark pause points in scripts. Practice counting to 3 after questions. Watch TED talks and note how speakers use pauses effectively.'
+                                        })
+                        
+                        if practice_suggestions:
+                            for suggestion in practice_suggestions:
+                                st.markdown(f"""
+                                <div style="padding: 15px; margin: 10px 0; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                                    <div style="display: flex; align-items: center; margin-bottom: 8px;">
+                                        <span style="font-size: 1.5rem; margin-right: 10px;">{suggestion['icon']}</span>
+                                        <strong style="font-size: 1.1rem; color: #2c3e50;">{suggestion['title']}</strong>
+                                    </div>
+                                    <div style="color: #555; line-height: 1.6; padding-left: 35px;">{suggestion['text']}</div>
+                                    <div style="color: #888; font-size: 0.9rem; margin-top: 8px; padding-left: 35px;">Category: Speech</div>
+                                </div>
+                                """, unsafe_allow_html=True)
+                        else:
+                            st.info("💪 Your speech quality is exceptional. Continue practicing to maintain excellence!")
                 else:
                     st.info("Please select at least one attempt to view statistics")
             else:
